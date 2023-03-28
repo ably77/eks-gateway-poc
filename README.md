@@ -8,17 +8,19 @@
 * [Lab 0 - Prerequisites](#lab-0---prerequisites-)
 * [Lab 1 - Setting up your Environment Variables](#lab-1---setting-up-your-environment-variables-)
 * [Lab 2 - Deploy and register Gloo Mesh](#lab-2---deploy-and-register-gloo-mesh-)
-* [Lab 4 - Deploy Gloo Mesh Addons](#lab-4---deploy-gloo-mesh-addons-)
-* [Lab 5 - Create the gateways workspace](#lab-5---create-the-gateways-workspace-)
-* [Lab 6 - Deploy the httpbin demo app](#lab-6---deploy-the-httpbin-demo-app-)
-* [Lab 7 - Create the httpbin workspace](#lab-7---create-the-httpbin-workspace-)
-* [Lab 8 - Expose the httpbin service](#lab-8---expose-the-httpbin-service-)
-* [Lab 9 - Securing Application access with ExtAuthPolicy](#lab-9---securing-application-access-with-extauthpolicy-)
-* [Lab 10 - Integrating with OPA](#lab-10---integrating-with-opa-)
-* [Lab 11 - Apply rate limiting to the Gateway](#lab-11---apply-rate-limiting-to-the-gateway-)
-* [Lab 12 - Exploring Istio, Envoy Proxy Config, and Metrics](#lab-12---exploring-istio-envoy-proxy-config-and-metrics-)
-* [Lab 13 - Exploring the Opentelemetry Pipeline](#lab-13---exploring-the-opentelemetry-pipeline-)
-* [Lab 14 - Leveraging the Latency EnvoyFilter for additional performance metrics from our gateway](#lab-14---leveraging-the-latency-envoyfilter-for-additional-performance-metrics-from-our-gateway-)
+* [Lab 3 - Deploy Gloo Mesh Addons](#lab-3---deploy-gloo-mesh-addons-)
+* [Lab 4 - Create the gateways workspace](#lab-4---create-the-gateways-workspace-)
+* [Lab 5 - Deploy the httpbin demo app](#lab-5---deploy-the-httpbin-demo-app-)
+* [Lab 6 - Create the httpbin workspace](#lab-6---create-the-httpbin-workspace-)
+* [Lab 7 - Expose the httpbin service](#lab-7---expose-the-httpbin-service-)
+* [Lab 8 - Securing Application access with ExtAuthPolicy](#lab-8---securing-application-access-with-extauthpolicy-)
+* [Lab 9 - Apply rate limiting to the Gateway](#lab-9---apply-rate-limiting-to-the-gateway-)
+* [Lab 10 - Exploring Istio, Envoy Proxy Config, and Metrics](#lab-10---exploring-istio-envoy-proxy-config-and-metrics-)
+* [Lab 11 - Exploring the Opentelemetry Pipeline](#lab-11---exploring-the-opentelemetry-pipeline-)
+
+## Labs that Require Solo Istio Images and included Solo Envoy Filters
+* [Lab 12 - Integrating with OPA](#lab-12---integrating-with-opa-)
+* [Lab 13 - Leveraging the Latency EnvoyFilter for additional performance metrics from our gateway](#lab-13---leveraging-the-latency-envoyfilter-for-additional-performance-metrics-from-our-gateway-)
 
 
 ## Introduction <a name="introduction"></a>
@@ -205,7 +207,7 @@ You should get an output similar to this:
 relay_push_clients_connected{cluster="cluster1"} 1
 ```
 
-## Lab 4 - Deploy Gloo Mesh Addons <a name="lab-4---deploy-gloo-mesh-addons-"></a>
+## Lab 3 - Deploy Gloo Mesh Addons <a name="lab-3---deploy-gloo-mesh-addons-"></a>
 
 To use the Gloo Mesh Gateway advanced features (external authentication, rate limiting, ...), you need to install the Gloo Mesh addons.
 
@@ -234,7 +236,7 @@ This is how to environment looks like now:
 
 ![Gloo Mesh Workshop Environment](images/arch/arch-1a.png)
 
-## Lab 5 - Create the gateways workspace <a name="lab-5---create-the-gateways-workspace-"></a>
+## Lab 4 - Create the gateways workspace <a name="lab-4---create-the-gateways-workspace-"></a>
 
 We're going to create a workspace for the team in charge of the Gateways.
 
@@ -291,7 +293,7 @@ The Gateway team has decided to import the following from the workspaces that ha
 - all the resources (RouteTables, VirtualDestination, ...) exported by these workspaces that have the label `expose` set to `true`
 
 
-## Lab 6 - Deploy the httpbin demo app <a name="lab-6---deploy-the-httpbin-demo-app-"></a>
+## Lab 5 - Deploy the httpbin demo app <a name="lab-5---deploy-the-httpbin-demo-app-"></a>
 
 We're going to deploy the httpbin application to demonstrate several features of Gloo Mesh.
 
@@ -388,7 +390,6 @@ spec:
       labels:
         app: in-mesh
         version: v1
-      annotations:
         sidecar.istio.io/inject: "true"
     spec:
       serviceAccountName: in-mesh
@@ -414,7 +415,7 @@ in-mesh-5d9d9549b5-qrdgd       2/2     Running   0          11s
 not-in-mesh-5c64bb49cd-m9kwm   1/1     Running   0          11s
 ```
 
-## Lab 7 - Create the httpbin workspace <a name="lab-7---create-the-httpbin-workspace-"></a>
+## Lab 6 - Create the httpbin workspace <a name="lab-6---create-the-httpbin-workspace-"></a>
 
 We're going to create a workspace for the team in charge of the httpbin application.
 
@@ -471,7 +472,7 @@ The Httpbin team has decided to export the following to the `gateway` workspace 
 - the `in-mesh` Kubernetes service
 - all the resources (RouteTables, VirtualDestination, ...) that have the label `expose` set to `true`
 
-## Lab 8 - Expose the httpbin service <a name="lab-8---expose-the-httpbin-service-"></a>
+## Lab 7 - Expose the httpbin service <a name="lab-7---expose-the-httpbin-service-"></a>
 
 In this step, we're going to expose the `httpbin` service through the Ingress Gateway using Gloo Mesh.
 
@@ -631,7 +632,7 @@ This diagram shows the flow of the request (through the Istio Ingress Gateway):
 ![Gloo Mesh Gateway](images/arch/arch-1b.png)
 
 
-## Lab 9 - Securing Application access with ExtAuthPolicy <a name="lab-9---securing-application-access-with-extauthpolicy-"></a>
+## Lab 8 - Securing Application access with ExtAuthPolicy <a name="lab-8---securing-application-access-with-extauthpolicy-"></a>
 In this step, we're going to secure the access to the `httpbin` service using OAuth. Integrating an app with extauth consists of a few steps:
 ```
 - create app registration in your OIDC
@@ -791,7 +792,312 @@ If you are using the example client config above, below are a few users that you
 - Username: test@solo.io // Password: gloo-public
 - Username: jdoe@gmail.com // Password: gloo-public
 
-## Lab 10 - Integrating with OPA <a name="lab-10---integrating-with-opa-"></a>
+## Lab 9 - Apply rate limiting to the Gateway <a name="lab-9---apply-rate-limiting-to-the-gateway-"></a>
+
+In this lab, lets explore adding rate limiting to our httpbin route
+
+In this step, we're going to apply rate limiting to the Gateway to only allow 5 requests per minute
+
+First, we need to create a `RateLimitClientConfig` object to define the descriptors:
+
+```bash
+kubectl --context ${CLUSTER1} apply -f - <<EOF
+apiVersion: trafficcontrol.policy.gloo.solo.io/v2
+kind: RateLimitClientConfig
+metadata:
+  labels:
+    workspace.solo.io/exported: "true"
+  name: httpbin
+  namespace: httpbin
+spec:
+  raw:
+    rateLimits:
+    - actions:
+      - genericKey:
+          descriptorValue: "per-minute"
+      - remoteAddress: {}
+EOF
+```
+
+Then, we need to create a `RateLimitServerConfig` object to define the limits based on the descriptors:
+
+```bash
+kubectl --context ${CLUSTER1} apply -f - <<EOF
+apiVersion: admin.gloo.solo.io/v2
+kind: RateLimitServerConfig
+metadata:
+  labels:
+    workspace.solo.io/exported: "true"
+  name: httpbin
+  namespace: gloo-mesh-addons
+spec:
+  destinationServers:
+  - port:
+      name: grpc
+    ref:
+      cluster: cluster1
+      name: rate-limiter
+      namespace: gloo-mesh-addons
+  raw:
+    descriptors:
+      - key: generic_key
+        value: "per-minute"
+        descriptors:
+          - key: remote_address
+            rateLimit:
+              requestsPerUnit: 5
+              unit: MINUTE
+EOF
+```
+
+After that, we need to create a `RateLimitPolicy` object to define the descriptors:
+
+```bash
+kubectl --context ${CLUSTER1} apply -f - <<EOF
+apiVersion: trafficcontrol.policy.gloo.solo.io/v2
+kind: RateLimitPolicy
+metadata:
+  labels:
+    workspace.solo.io/exported: "true"
+  name: httpbin
+  namespace: httpbin
+spec:
+  applyToRoutes:
+  - route:
+      labels:
+        ratelimited: "true"
+  config:
+    ratelimitClientConfig:
+      cluster: cluster1
+      name: httpbin
+      namespace: httpbin
+    ratelimitServerConfig:
+      cluster: cluster1
+      name: httpbin
+      namespace: gloo-mesh-addons
+    serverSettings:
+      cluster: cluster1
+      name: rate-limit-server
+      namespace: httpbin
+EOF
+```
+
+We also need to create a `RateLimitServerSettings`, which is a CRD that define which extauth server to use: 
+
+```bash
+kubectl --context ${CLUSTER1} apply -f - <<EOF
+apiVersion: admin.gloo.solo.io/v2
+kind: RateLimitServerSettings
+metadata:
+  labels:
+    workspace.solo.io/exported: "true"
+  name: rate-limit-server
+  namespace: httpbin
+spec:
+  destinationServer:
+    port:
+      name: grpc
+    ref:
+      cluster: cluster1
+      name: rate-limiter
+      namespace: gloo-mesh-addons
+EOF
+```
+
+Now refresh the httpbin web page multiple times. You should see a 429 error after 5 refreshes
+
+Note: If you scroll up, notice that we had already preloaded this route table with the `ratelimited: "true"` label in an earlier lab. When we applied our rate limiting policy, Gloo Platform automatically picked up on this label and applied our RL configuration for us. Below is the `RouteTable` again for reference:
+```bash
+kubectl --context ${CLUSTER1} apply -f - <<EOF
+apiVersion: networking.gloo.solo.io/v2
+kind: RouteTable
+metadata:
+  name: httpbin
+  namespace: httpbin
+  labels:
+    expose: "true"
+spec:
+  http:
+    - name: httpbin
+      labels:
+        route_name: "httpbin"
+        ratelimited: "true"
+      matchers:
+      - uri:
+          exact: /get
+      - uri:
+          prefix: /anything
+      - uri:
+          prefix: /callback
+      - uri:
+          prefix: /logout
+      forwardTo:
+        destinations:
+        - ref:
+            name: in-mesh
+            namespace: httpbin
+          port:
+            number: 8000
+EOF
+```
+
+This diagram shows the flow of the request (with the Istio ingress gateway leveraging the `rate limiter` Pod to determine if the request should be allowed):
+
+![Gloo Mesh Gateway Rate Limiting](images/arch/arch-1d.png)
+
+
+### cleanup
+
+Let's apply the original `RouteTable` yaml:
+
+```bash
+kubectl --context ${CLUSTER1} apply -f - <<EOF
+apiVersion: networking.gloo.solo.io/v2
+kind: RouteTable
+metadata:
+  name: httpbin
+  namespace: httpbin
+  labels:
+    expose: "true"
+spec:
+  http:
+    - name: httpbin
+      matchers:
+      - uri:
+          exact: /get
+      forwardTo:
+        destinations:
+        - ref:
+            name: in-mesh
+            namespace: httpbin
+          port:
+            number: 8000
+EOF
+```
+
+And also delete the different objects we've created:
+
+```bash
+kubectl --context ${CLUSTER1} -n httpbin delete ratelimitpolicy httpbin
+kubectl --context ${CLUSTER1} -n httpbin delete ratelimitclientconfig httpbin
+kubectl --context ${CLUSTER1} -n gloo-mesh-addons delete ratelimitserverconfig httpbin
+kubectl --context ${CLUSTER1} -n httpbin delete ratelimitserversettings rate-limit-server
+```
+
+## Lab 10 - Exploring Istio, Envoy Proxy Config, and Metrics <a name="lab-10---exploring-istio-envoy-proxy-config-and-metrics-"></a>
+
+## Get an overview of your mesh
+```
+istioctl proxy-status
+```
+
+Example output
+```
+% istioctl proxy-status
+NAME                                                          CLUSTER      CDS        LDS        EDS        RDS          ECDS         ISTIOD                         VERSION
+ext-auth-service-7fccf5b78f-mb6wb.gloo-mesh-addons            cluster1     SYNCED     SYNCED     SYNCED     SYNCED       NOT SENT     istiod-1-17-94858bc8-9chtf     1.17.1-solo
+in-mesh-5978df87cc-mfmtx.httpbin                              cluster1     SYNCED     SYNCED     SYNCED     SYNCED       NOT SENT     istiod-1-17-94858bc8-9chtf     1.17.1-solo
+istio-eastwestgateway-1-17-8d85c9f97-s88gt.istio-system     cluster1     SYNCED     SYNCED     SYNCED     NOT SENT     NOT SENT     istiod-1-17-94858bc8-9chtf     1.17.1-solo
+istio-ingressgateway-1-17-79b44d8bb-vth6t.istio-system      cluster1     SYNCED     SYNCED     SYNCED     SYNCED       NOT SENT     istiod-1-17-94858bc8-9chtf     1.17.1-solo
+rate-limiter-66676f8d5b-wrcd7.gloo-mesh-addons                cluster1     SYNCED     SYNCED     SYNCED     SYNCED       NOT SENT     istiod-1-17-94858bc8-9chtf     1.17.1-solo
+redis-669c97869d-hjtfp.gloo-mesh-addons                       cluster1     SYNCED     SYNCED     SYNCED     SYNCED       NOT SENT     istiod-1-17-94858bc8-9chtf     1.17.1-solo
+```
+
+## Retrieve diffs between Envoy and Istiod
+```
+istioctl proxy-status deploy/in-mesh -n httpbin
+```
+
+## grab envoy stats of sidecar using istioctl
+```
+istioctl experimental envoy-stats <pod> --namespace <namespace> 
+
+istioctl experimental envoy-stats deploy/<deployment_name> --namespace <namespace> 
+```
+
+For example try this on the httpbin application
+```
+istioctl experimental envoy-stats deploy/in-mesh --namespace httpbin
+```
+
+### output in prometheus format
+Add the `--output prom` flag to output metrics in prometheus format
+```
+istioctl experimental envoy-stats deploy/in-mesh --namespace httpbin --output prom
+```
+
+## Get all Envoy proxy config
+```
+istioctl proxy-config all -n <namespace> <pod> -o <output>
+```
+
+Example:
+```
+istioctl proxy-config all -n httpbin deploy/in-mesh
+```
+
+### Retrieve just the endpoint configuration
+```
+istioctl proxy-config endpoint -n httpbin deploy/in-mesh
+```
+
+## Inspect bootstrap configuration
+```
+istioctl proxy-config bootstrap -n istio-system deploy/istio-ingressgateway
+```
+
+## Create an Istio Bug Report
+```
+istioctl bug-report
+```
+See output named `bug-report.tar.gz`
+
+## Lab 11 - Exploring the Opentelemetry Pipeline <a name="lab-11---exploring-the-opentelemetry-pipeline-"></a>
+
+As a part of the Gloo Platform Helm setup, we installed the Gloo OpenTelemetry Pipeline. A high level architecture of the pipeline looks like this:
+
+![otel pipeline](images/observability/metrics-architecture-otel.png)
+
+- Gloo metrics collector agents are deployed as a daemonset in all Gloo workload clusters. The collector agents scrape metrics from workloads in your cluster, such as the Gloo agents, the Istio control plane istiod, or the Istio-injected workloads. The agents then enrich and convert the metrics. For example, the ID of the source and destination workload is added to the metrics so that you can filter the metrics for the workload that you are interested in.
+- The collector agents send the scraped metrics to the Gloo metrics gateway in the Gloo management cluster via gRPC push procedures.
+- The Prometheus server scrapes the metrics from the Gloo metrics gateway.
+
+
+To view the scrape config, take a look at the `gloo-metrics-collector-config` configmap
+```
+kubectl --context ${CLUSTER1} get configmap gloo-metrics-collector-config -n gloo-mesh -o yaml
+```
+
+To view metrics that are being sent to our metrics gateway component port-forward to the service at port 9091 with the command below
+```
+kubectl --context ${CLUSTER1} -n gloo-mesh \
+    port-forward deploy/gloo-metrics-gateway 9091
+```
+
+Navigate to https://localhost:9091/metrics to view the metrics that have been collected by the oTel pipeline
+
+
+### Using Prometheus to view oTel observability metrics
+By default, Gloo Platform configures the Prometheus Reciever for the oTel collector on each node as well as the Exporter on the Metrics Gateway to send metrics to the Prometheus service in the `gloo-mesh` namespace. The Gloo Mesh UI uses these metrics to populate it's service graph
+
+You can port-forward to the Prometheus service using the command below:
+```
+kubectl --context ${CLUSTER1} port-forward svc/prometheus-server -n gloo-mesh 9090:80
+```
+Navigate to https://localhost:9090 to access Prometheus UI
+
+In the Prometheus UI, if you navigate to the Status dropdown > Targets you should see the otel-collector details
+
+You can also query for metrics within the Prometheus UI, for example try to query the `istio_requests_total`
+
+![prometheus](images/observability/prometheus-ui.png)
+
+
+
+
+## Labs that Require Solo Istio Images and included Solo Envoy Filters
+
+## Lab 12 - Integrating with OPA <a name="lab-12---integrating-with-opa-"></a>
 
 ### OPA inputs
 You can also perform authorization using OPA. Gloo Mesh's OPA integration populates an input document to use in your OPA policies which allows you to easily write rego policy
@@ -1036,307 +1342,7 @@ This diagram shows the flow of the request (with the Istio ingress gateway lever
 
 ![Gloo Mesh Dashboard OIDC](images/arch/arch-1c.png)
 
-## Lab 11 - Apply rate limiting to the Gateway <a name="lab-11---apply-rate-limiting-to-the-gateway-"></a>
-
-In this lab, lets explore adding rate limiting to our httpbin route
-
-In this step, we're going to apply rate limiting to the Gateway to only allow 5 requests per minute
-
-First, we need to create a `RateLimitClientConfig` object to define the descriptors:
-
-```bash
-kubectl --context ${CLUSTER1} apply -f - <<EOF
-apiVersion: trafficcontrol.policy.gloo.solo.io/v2
-kind: RateLimitClientConfig
-metadata:
-  labels:
-    workspace.solo.io/exported: "true"
-  name: httpbin
-  namespace: httpbin
-spec:
-  raw:
-    rateLimits:
-    - actions:
-      - genericKey:
-          descriptorValue: "per-minute"
-      - remoteAddress: {}
-EOF
-```
-
-Then, we need to create a `RateLimitServerConfig` object to define the limits based on the descriptors:
-
-```bash
-kubectl --context ${CLUSTER1} apply -f - <<EOF
-apiVersion: admin.gloo.solo.io/v2
-kind: RateLimitServerConfig
-metadata:
-  labels:
-    workspace.solo.io/exported: "true"
-  name: httpbin
-  namespace: gloo-mesh-addons
-spec:
-  destinationServers:
-  - port:
-      name: grpc
-    ref:
-      cluster: cluster1
-      name: rate-limiter
-      namespace: gloo-mesh-addons
-  raw:
-    descriptors:
-      - key: generic_key
-        value: "per-minute"
-        descriptors:
-          - key: remote_address
-            rateLimit:
-              requestsPerUnit: 5
-              unit: MINUTE
-EOF
-```
-
-After that, we need to create a `RateLimitPolicy` object to define the descriptors:
-
-```bash
-kubectl --context ${CLUSTER1} apply -f - <<EOF
-apiVersion: trafficcontrol.policy.gloo.solo.io/v2
-kind: RateLimitPolicy
-metadata:
-  labels:
-    workspace.solo.io/exported: "true"
-  name: httpbin
-  namespace: httpbin
-spec:
-  applyToRoutes:
-  - route:
-      labels:
-        ratelimited: "true"
-  config:
-    ratelimitClientConfig:
-      cluster: cluster1
-      name: httpbin
-      namespace: httpbin
-    ratelimitServerConfig:
-      cluster: cluster1
-      name: httpbin
-      namespace: gloo-mesh-addons
-    serverSettings:
-      cluster: cluster1
-      name: rate-limit-server
-      namespace: httpbin
-EOF
-```
-
-We also need to create a `RateLimitServerSettings`, which is a CRD that define which extauth server to use: 
-
-```bash
-kubectl --context ${CLUSTER1} apply -f - <<EOF
-apiVersion: admin.gloo.solo.io/v2
-kind: RateLimitServerSettings
-metadata:
-  labels:
-    workspace.solo.io/exported: "true"
-  name: rate-limit-server
-  namespace: httpbin
-spec:
-  destinationServer:
-    port:
-      name: grpc
-    ref:
-      cluster: cluster1
-      name: rate-limiter
-      namespace: gloo-mesh-addons
-EOF
-```
-
-Now refresh the httpbin web page multiple times. You should see a 429 error after 5 refreshes
-
-Note: If you scroll up, notice that we had already preloaded this route table with the `ratelimited: "true"` label in an earlier lab. When we applied our rate limiting policy, Gloo Platform automatically picked up on this label and applied our RL configuration for us. Below is the `RouteTable` again for reference:
-```bash
-kubectl --context ${CLUSTER1} apply -f - <<EOF
-apiVersion: networking.gloo.solo.io/v2
-kind: RouteTable
-metadata:
-  name: httpbin
-  namespace: httpbin
-  labels:
-    expose: "true"
-spec:
-  http:
-    - name: httpbin
-      labels:
-        route_name: "httpbin"
-        ratelimited: "true"
-      matchers:
-      - uri:
-          exact: /get
-      - uri:
-          prefix: /anything
-      - uri:
-          prefix: /callback
-      - uri:
-          prefix: /logout
-      forwardTo:
-        destinations:
-        - ref:
-            name: in-mesh
-            namespace: httpbin
-          port:
-            number: 8000
-EOF
-```
-
-This diagram shows the flow of the request (with the Istio ingress gateway leveraging the `rate limiter` Pod to determine if the request should be allowed):
-
-![Gloo Mesh Gateway Rate Limiting](images/arch/arch-1d.png)
-
-
-### cleanup
-
-Let's apply the original `RouteTable` yaml:
-
-```bash
-kubectl --context ${CLUSTER1} apply -f - <<EOF
-apiVersion: networking.gloo.solo.io/v2
-kind: RouteTable
-metadata:
-  name: httpbin
-  namespace: httpbin
-  labels:
-    expose: "true"
-spec:
-  http:
-    - name: httpbin
-      matchers:
-      - uri:
-          exact: /get
-      forwardTo:
-        destinations:
-        - ref:
-            name: in-mesh
-            namespace: httpbin
-          port:
-            number: 8000
-EOF
-```
-
-And also delete the different objects we've created:
-
-```bash
-kubectl --context ${CLUSTER1} -n httpbin delete ratelimitpolicy httpbin
-kubectl --context ${CLUSTER1} -n httpbin delete ratelimitclientconfig httpbin
-kubectl --context ${CLUSTER1} -n gloo-mesh-addons delete ratelimitserverconfig httpbin
-kubectl --context ${CLUSTER1} -n httpbin delete ratelimitserversettings rate-limit-server
-```
-
-## Lab 12 - Exploring Istio, Envoy Proxy Config, and Metrics <a name="lab-12---exploring-istio-envoy-proxy-config-and-metrics-"></a>
-
-## Get an overview of your mesh
-```
-istioctl proxy-status
-```
-
-Example output
-```
-% istioctl proxy-status
-NAME                                                          CLUSTER      CDS        LDS        EDS        RDS          ECDS         ISTIOD                         VERSION
-ext-auth-service-7fccf5b78f-mb6wb.gloo-mesh-addons            cluster1     SYNCED     SYNCED     SYNCED     SYNCED       NOT SENT     istiod-1-17-94858bc8-9chtf     1.17.1-solo
-in-mesh-5978df87cc-mfmtx.httpbin                              cluster1     SYNCED     SYNCED     SYNCED     SYNCED       NOT SENT     istiod-1-17-94858bc8-9chtf     1.17.1-solo
-istio-eastwestgateway-1-17-8d85c9f97-s88gt.istio-system     cluster1     SYNCED     SYNCED     SYNCED     NOT SENT     NOT SENT     istiod-1-17-94858bc8-9chtf     1.17.1-solo
-istio-ingressgateway-1-17-79b44d8bb-vth6t.istio-system      cluster1     SYNCED     SYNCED     SYNCED     SYNCED       NOT SENT     istiod-1-17-94858bc8-9chtf     1.17.1-solo
-rate-limiter-66676f8d5b-wrcd7.gloo-mesh-addons                cluster1     SYNCED     SYNCED     SYNCED     SYNCED       NOT SENT     istiod-1-17-94858bc8-9chtf     1.17.1-solo
-redis-669c97869d-hjtfp.gloo-mesh-addons                       cluster1     SYNCED     SYNCED     SYNCED     SYNCED       NOT SENT     istiod-1-17-94858bc8-9chtf     1.17.1-solo
-```
-
-## Retrieve diffs between Envoy and Istiod
-```
-istioctl proxy-status deploy/in-mesh -n httpbin
-```
-
-## grab envoy stats of sidecar using istioctl
-```
-istioctl experimental envoy-stats <pod> --namespace <namespace> 
-
-istioctl experimental envoy-stats deploy/<deployment_name> --namespace <namespace> 
-```
-
-For example try this on the httpbin application
-```
-istioctl experimental envoy-stats deploy/in-mesh --namespace httpbin
-```
-
-### output in prometheus format
-Add the `--output prom` flag to output metrics in prometheus format
-```
-istioctl experimental envoy-stats deploy/in-mesh --namespace httpbin --output prom
-```
-
-## Get all Envoy proxy config
-```
-istioctl proxy-config all -n <namespace> <pod> -o <output>
-```
-
-Example:
-```
-istioctl proxy-config all -n httpbin deploy/in-mesh
-```
-
-### Retrieve just the endpoint configuration
-```
-istioctl proxy-config endpoint -n httpbin deploy/in-mesh
-```
-
-## Inspect bootstrap configuration
-```
-istioctl proxy-config bootstrap -n istio-system deploy/istio-ingressgateway
-```
-
-## Create an Istio Bug Report
-```
-istioctl bug-report
-```
-See output named `bug-report.tar.gz`
-
-## Lab 13 - Exploring the Opentelemetry Pipeline <a name="lab-13---exploring-the-opentelemetry-pipeline-"></a>
-
-As a part of the Gloo Platform Helm setup, we installed the Gloo OpenTelemetry Pipeline. A high level architecture of the pipeline looks like this:
-
-![otel pipeline](images/observability/metrics-architecture-otel.png)
-
-- Gloo metrics collector agents are deployed as a daemonset in all Gloo workload clusters. The collector agents scrape metrics from workloads in your cluster, such as the Gloo agents, the Istio control plane istiod, or the Istio-injected workloads. The agents then enrich and convert the metrics. For example, the ID of the source and destination workload is added to the metrics so that you can filter the metrics for the workload that you are interested in.
-- The collector agents send the scraped metrics to the Gloo metrics gateway in the Gloo management cluster via gRPC push procedures.
-- The Prometheus server scrapes the metrics from the Gloo metrics gateway.
-
-
-To view the scrape config, take a look at the `gloo-metrics-collector-config` configmap
-```
-kubectl --context ${CLUSTER1} get configmap gloo-metrics-collector-config -n gloo-mesh -o yaml
-```
-
-To view metrics that are being sent to our metrics gateway component port-forward to the service at port 9091 with the command below
-```
-kubectl --context ${CLUSTER1} -n gloo-mesh \
-    port-forward deploy/gloo-metrics-gateway 9091
-```
-
-Navigate to https://localhost:9091/metrics to view the metrics that have been collected by the oTel pipeline
-
-
-### Using Prometheus to view oTel observability metrics
-By default, Gloo Platform configures the Prometheus Reciever for the oTel collector on each node as well as the Exporter on the Metrics Gateway to send metrics to the Prometheus service in the `gloo-mesh` namespace. The Gloo Mesh UI uses these metrics to populate it's service graph
-
-You can port-forward to the Prometheus service using the command below:
-```
-kubectl --context ${CLUSTER1} port-forward svc/prometheus-server -n gloo-mesh 9090:80
-```
-Navigate to https://localhost:9090 to access Prometheus UI
-
-In the Prometheus UI, if you navigate to the Status dropdown > Targets you should see the otel-collector details
-
-You can also query for metrics within the Prometheus UI, for example try to query the `istio_requests_total`
-
-![prometheus](images/observability/prometheus-ui.png)
-
-## Lab 14 - Leveraging the Latency EnvoyFilter for additional performance metrics from our gateway <a name="lab-14---leveraging-the-latency-envoyfilter-for-additional-performance-metrics-from-our-gateway-"></a>
+## Lab 13 - Leveraging the Latency EnvoyFilter for additional performance metrics from our gateway <a name="lab-13---leveraging-the-latency-envoyfilter-for-additional-performance-metrics-from-our-gateway-"></a>
 
 The Solo Istio images are packaged with an additional proxy latency filter that measures the latency incurred by the filter chain in a histogram. We can use this latency filter by deploying an `EnvoyFilter` in Istio
 
