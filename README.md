@@ -207,186 +207,6 @@ You should get an output similar to this:
 relay_push_clients_connected{cluster="cluster1"} 1
 ```
 
-## Lab 3 - Deploy Istio using Gloo Mesh Lifecycle Manager <a name="lab-3---deploy-istio-using-gloo-mesh-lifecycle-manager-"></a>
-
-We are going to deploy Istio using Gloo Mesh Lifecycle Manager.
-
-First of all, let's create Kubernetes services for the gateways:
-
-```bash
-kubectl --context ${CLUSTER1} create ns istio-gateways
-kubectl --context ${CLUSTER1} label namespace istio-gateways istio.io/rev=1-16 --overwrite
-
-cat << EOF | kubectl --context ${CLUSTER1} apply -f -
-apiVersion: v1
-kind: Service
-metadata:
-  labels:
-    app: istio-ingressgateway
-    istio: ingressgateway
-  name: istio-ingressgateway
-  namespace: istio-gateways
-spec:
-  ports:
-  - name: http2
-    port: 80
-    protocol: TCP
-    targetPort: 8080
-  - name: https
-    port: 443
-    protocol: TCP
-    targetPort: 8443
-  selector:
-    app: istio-ingressgateway
-    istio: ingressgateway
-    revision: 1-16
-  type: LoadBalancer
-
-EOF
-```
-
-Note: If using the NLB controller, additional annotations may be required in the service above. Otherwise, a Classic Load Balancer will be created
-```
-annotations:
-  # uncomment below if using NLB controller
-  #service.beta.kubernetes.io/aws-load-balancer-backend-protocol: TCP
-  #service.beta.kubernetes.io/aws-load-balancer-healthcheck-healthy-threshold: "2"
-  #service.beta.kubernetes.io/aws-load-balancer-healthcheck-interval: "10"
-  #service.beta.kubernetes.io/aws-load-balancer-healthcheck-port: "15021"
-  #service.beta.kubernetes.io/aws-load-balancer-healthcheck-protocol: tcp
-  #service.beta.kubernetes.io/aws-load-balancer-healthcheck-unhealthy-threshold: "2"
-  #service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
-  #service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
-  #service.beta.kubernetes.io/aws-load-balancer-type: nlb-ip
-```
-
-It allows us to have full control on which Istio revision we want to use.
-
-Then, we can tell Gloo Mesh to deploy the Istio control planes and the gateways in the cluster(s)
-
-```bash
-cat << EOF | kubectl --context ${CLUSTER1} apply -f -
-
-apiVersion: admin.gloo.solo.io/v2
-kind: IstioLifecycleManager
-metadata:
-  name: cluster1-installation
-  namespace: gloo-mesh
-spec:
-  installations:
-    - clusters:
-      - name: cluster1
-        defaultRevision: true
-      revision: 1-16
-      istioOperatorSpec:
-        profile: minimal
-        hub: us-docker.pkg.dev/gloo-mesh/istio-workshops
-        tag: 1.16.2-solo
-        namespace: istio-system
-        values:
-          global:
-            meshID: mesh1
-            multiCluster:
-              clusterName: cluster1
-            network: cluster1
-        meshConfig:
-          accessLogFile: /dev/stdout
-          defaultConfig:        
-            proxyMetadata:
-              ISTIO_META_DNS_CAPTURE: "true"
-              ISTIO_META_DNS_AUTO_ALLOCATE: "true"
-        components:
-          pilot:
-            k8s:
-              env:
-                - name: PILOT_ENABLE_K8S_SELECT_WORKLOAD_ENTRIES
-                  value: "false"
-          ingressGateways:
-          - name: istio-ingressgateway
-            enabled: false
-
-EOF
-cat << EOF | kubectl --context ${CLUSTER1} apply -f -
-
-apiVersion: admin.gloo.solo.io/v2
-kind: GatewayLifecycleManager
-metadata:
-  name: cluster1-ingress
-  namespace: gloo-mesh
-spec:
-  installations:
-    - clusters:
-      - name: cluster1
-        activeGateway: false
-      gatewayRevision: 1-16
-      istioOperatorSpec:
-        profile: empty
-        hub: us-docker.pkg.dev/gloo-mesh/istio-workshops
-        tag: 1.16.2-solo
-        values:
-          gateways:
-            istio-ingressgateway:
-              customService: true
-        components:
-          ingressGateways:
-            - name: istio-ingressgateway
-              namespace: istio-gateways
-              enabled: true
-              label:
-                istio: ingressgateway
----
-apiVersion: admin.gloo.solo.io/v2
-kind: GatewayLifecycleManager
-metadata:
-  name: cluster1-eastwest
-  namespace: gloo-mesh
-spec:
-  installations:
-    - clusters:
-      - name: cluster1
-        activeGateway: false
-      gatewayRevision: 1-16
-      istioOperatorSpec:
-        profile: empty
-        hub: us-docker.pkg.dev/gloo-mesh/istio-workshops
-        tag: 1.16.2-solo
-        values:
-          gateways:
-            istio-ingressgateway:
-              customService: true
-        components:
-          ingressGateways:
-            - name: istio-eastwestgateway
-              namespace: istio-gateways
-              enabled: true
-              label:
-                istio: eastwestgateway
-                topology.istio.io/network: cluster1
-              k8s:
-                env:
-                  - name: ISTIO_META_ROUTER_MODE
-                    value: "sni-dnat"
-                  - name: ISTIO_META_REQUESTED_NETWORK_VIEW
-                    value: cluster1
-
-EOF
-```
-
-Set the environment variable for the service corresponding to the Istio Ingress Gateway of the cluster(s):
-
-```bash
-export ENDPOINT_HTTP_GW_CLUSTER1=$(kubectl --context ${CLUSTER1} -n istio-gateways get svc -l istio=ingressgateway -o jsonpath='{.items[0].status.loadBalancer.ingress[0].*}'):80
-export ENDPOINT_HTTPS_GW_CLUSTER1=$(kubectl --context ${CLUSTER1} -n istio-gateways get svc -l istio=ingressgateway -o jsonpath='{.items[0].status.loadBalancer.ingress[0].*}'):443
-export HOST_GW_CLUSTER1=$(echo ${ENDPOINT_HTTP_GW_CLUSTER1} | cut -d: -f1)
-```
-
-Check that the variables have correct values:
-```bash
-echo $ENDPOINT_HTTP_GW_CLUSTER1
-echo $ENDPOINT_HTTPS_GW_CLUSTER1
-echo $HOST_GW_CLUSTER1
-```
-
 ## Lab 4 - Deploy Gloo Mesh Addons <a name="lab-4---deploy-gloo-mesh-addons-"></a>
 
 To use the Gloo Mesh Gateway advanced features (external authentication, rate limiting, ...), you need to install the Gloo Mesh addons.
@@ -395,7 +215,7 @@ First, you need to create a namespace for the addons, with Istio injection enabl
 
 ```bash
 kubectl --context ${CLUSTER1} create namespace gloo-mesh-addons
-kubectl --context ${CLUSTER1} label namespace gloo-mesh-addons istio.io/rev=1-16 --overwrite
+kubectl --context ${CLUSTER1} label namespace gloo-mesh-addons istio-injection="enabled" --overwrite
 ```
 
 Then, you can deploy the addons on the cluster(s) using Helm:
@@ -422,7 +242,7 @@ We're going to create a workspace for the team in charge of the Gateways.
 
 The platform team needs to create the corresponding `Workspace` Kubernetes objects in the Gloo Mesh management cluster.
 
-Let's create the `gateways` workspace which corresponds to the `istio-gateways` and the `gloo-mesh-addons` namespaces on the cluster(s):
+Let's create the `gateways` workspace which corresponds to the `istio-system` and the `gloo-mesh-addons` namespaces on the cluster(s):
 
 ```bash
 kubectl apply --context ${CLUSTER1} -f- <<EOF
@@ -435,12 +255,12 @@ spec:
   workloadClusters:
   - name: cluster1
     namespaces:
-    - name: istio-gateways
+    - name: istio-system
     - name: gloo-mesh-addons
 EOF
 ```
 
-Then, the Gateway team creates a `WorkspaceSettings` Kubernetes object in one of the namespaces of the `gateways` workspace (so the `istio-gateways` or the `gloo-mesh-addons` namespace):
+Then, the Gateway team creates a `WorkspaceSettings` Kubernetes object in one of the namespaces of the `gateways` workspace (so the `istio-system` or the `gloo-mesh-addons` namespace):
 
 ```bash
 kubectl apply --context ${CLUSTER1} -f- <<EOF
@@ -448,7 +268,7 @@ apiVersion: admin.gloo.solo.io/v2
 kind: WorkspaceSettings
 metadata:
   name: gateways
-  namespace: istio-gateways
+  namespace: istio-system
 spec:
   importFrom:
   - workspaces:
@@ -570,7 +390,8 @@ spec:
       labels:
         app: in-mesh
         version: v1
-        istio.io/rev: 1-16
+      annotations:
+        sidecar.istio.io/inject: "true"
     spec:
       serviceAccountName: in-mesh
       containers:
@@ -664,7 +485,7 @@ apiVersion: networking.gloo.solo.io/v2
 kind: VirtualGateway
 metadata:
   name: north-south-gw
-  namespace: istio-gateways
+  namespace: istio-system
 spec:
   workloads:
     - selector:
@@ -688,13 +509,13 @@ apiVersion: networking.gloo.solo.io/v2
 kind: RouteTable
 metadata:
   name: main
-  namespace: istio-gateways
+  namespace: istio-system
 spec:
   hosts:
     - '*'
   virtualGateways:
     - name: north-south-gw
-      namespace: istio-gateways
+      namespace: istio-system
       cluster: cluster1
   workloadSelectors: []
   http:
@@ -761,7 +582,7 @@ openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
 Then, you have to store them in a Kubernetes secrets running the following commands:
 
 ```bash
-kubectl --context ${CLUSTER1} -n istio-gateways create secret generic tls-secret \
+kubectl --context ${CLUSTER1} -n istio-system create secret generic tls-secret \
 --from-file=tls.key=tls.key \
 --from-file=tls.crt=tls.crt
 ```
@@ -774,7 +595,7 @@ apiVersion: networking.gloo.solo.io/v2
 kind: VirtualGateway
 metadata:
   name: north-south-gw
-  namespace: istio-gateways
+  namespace: istio-system
 spec:
   workloads:
     - selector:
@@ -842,7 +663,7 @@ EOF
 
 Set the callback URL in your OIDC provider to map to our httpbin app
 ```bash
-export APP_CALLBACK_URL="https://$(kubectl --context ${CLUSTER1} -n istio-gateways get svc istio-ingressgateway -o jsonpath='{.status.loadBalancer.ingress[0].*}')"
+export APP_CALLBACK_URL="https://$(kubectl --context ${CLUSTER1} -n istio-system get svc istio-ingressgateway -o jsonpath='{.status.loadBalancer.ingress[0].*}')"
 
 echo $APP_CALLBACK_URL
 ```
@@ -1422,8 +1243,8 @@ Example output
 NAME                                                          CLUSTER      CDS        LDS        EDS        RDS          ECDS         ISTIOD                         VERSION
 ext-auth-service-7fccf5b78f-mb6wb.gloo-mesh-addons            cluster1     SYNCED     SYNCED     SYNCED     SYNCED       NOT SENT     istiod-1-17-94858bc8-9chtf     1.17.1-solo
 in-mesh-5978df87cc-mfmtx.httpbin                              cluster1     SYNCED     SYNCED     SYNCED     SYNCED       NOT SENT     istiod-1-17-94858bc8-9chtf     1.17.1-solo
-istio-eastwestgateway-1-17-8d85c9f97-s88gt.istio-gateways     cluster1     SYNCED     SYNCED     SYNCED     NOT SENT     NOT SENT     istiod-1-17-94858bc8-9chtf     1.17.1-solo
-istio-ingressgateway-1-17-79b44d8bb-vth6t.istio-gateways      cluster1     SYNCED     SYNCED     SYNCED     SYNCED       NOT SENT     istiod-1-17-94858bc8-9chtf     1.17.1-solo
+istio-eastwestgateway-1-17-8d85c9f97-s88gt.istio-system     cluster1     SYNCED     SYNCED     SYNCED     NOT SENT     NOT SENT     istiod-1-17-94858bc8-9chtf     1.17.1-solo
+istio-ingressgateway-1-17-79b44d8bb-vth6t.istio-system      cluster1     SYNCED     SYNCED     SYNCED     SYNCED       NOT SENT     istiod-1-17-94858bc8-9chtf     1.17.1-solo
 rate-limiter-66676f8d5b-wrcd7.gloo-mesh-addons                cluster1     SYNCED     SYNCED     SYNCED     SYNCED       NOT SENT     istiod-1-17-94858bc8-9chtf     1.17.1-solo
 redis-669c97869d-hjtfp.gloo-mesh-addons                       cluster1     SYNCED     SYNCED     SYNCED     SYNCED       NOT SENT     istiod-1-17-94858bc8-9chtf     1.17.1-solo
 ```
@@ -1468,7 +1289,7 @@ istioctl proxy-config endpoint -n httpbin deploy/in-mesh
 
 ## Inspect bootstrap configuration
 ```
-istioctl proxy-config bootstrap -n istio-gateways deploy/istio-ingressgateway-1-16
+istioctl proxy-config bootstrap -n istio-system deploy/istio-ingressgateway
 ```
 
 ## Create an Istio Bug Report
@@ -1559,7 +1380,7 @@ EOF
 
 After you let some traffic flow through the gateway, you will be able to see proxy latency histograms corresponding to each service in the proxy envoy/prometheus stats. To get to the stats page, use this port-forward command below
 ```
-kubectl --context ${CLUSTER1} port-forward deploy/istio-ingressgateway-1-16 -n istio-gateways 15000:15000
+kubectl --context ${CLUSTER1} port-forward deploy/istio-ingressgateway -n istio-system 15000:15000
 ```
 
 Now navigate to localhost:15000 in your browser. Scroll down to the stats/prometheus to view the proxy Prometheus stats. If you search for `latency` you should be able to find newly emitted metrics measuring proxy latency
@@ -1591,392 +1412,3 @@ Note that `le` refers to milliseconds, and the counts are cumulative. So using t
 - 75858 requests took under 0.5ms latency
 - 75913 were less than 5ms
 - All were less than 10ms
-
-## Lab 15 - Upgrade Istio using Gloo Mesh Lifecycle Manager <a name="lab-15---upgrade-istio-using-gloo-mesh-lifecycle-manager-"></a>
-
-Set the variables corresponding to the old and new revision tags:
-
-```bash
-export OLD_REVISION=1-16
-export NEW_REVISION=1-17
-```
-
-We are going to upgrade Istio using Gloo Mesh Lifecycle Manager.
-
-```bash
-cat << EOF | kubectl --context ${CLUSTER1} apply -f -
-
-apiVersion: admin.gloo.solo.io/v2
-kind: IstioLifecycleManager
-metadata:
-  name: cluster1-installation
-  namespace: gloo-mesh
-spec:
-  installations:
-    - clusters:
-      - name: cluster1
-        defaultRevision: true
-      revision: ${OLD_REVISION}
-      istioOperatorSpec:
-        profile: minimal
-        hub: us-docker.pkg.dev/gloo-mesh/istio-workshops
-        tag: 1.16.2-solo
-        namespace: istio-system
-        values:
-          global:
-            meshID: mesh1
-            multiCluster:
-              clusterName: cluster1
-            network: cluster1
-        meshConfig:
-          accessLogFile: /dev/stdout
-          defaultConfig:
-            proxyMetadata:
-              ISTIO_META_DNS_CAPTURE: "true"
-              ISTIO_META_DNS_AUTO_ALLOCATE: "true"
-        components:
-          pilot:
-            k8s:
-              env:
-                - name: PILOT_ENABLE_K8S_SELECT_WORKLOAD_ENTRIES
-                  value: "false"
-          ingressGateways:
-          - name: istio-ingressgateway
-            enabled: false
-    - clusters:
-      - name: cluster1
-        defaultRevision: false
-      revision: ${NEW_REVISION}
-      istioOperatorSpec:
-        profile: minimal
-        hub: us-docker.pkg.dev/gloo-mesh/istio-workshops
-        tag: 1.17.1-solo
-        namespace: istio-system
-        values:
-          global:
-            meshID: mesh1
-            multiCluster:
-              clusterName: cluster1
-            network: cluster1
-        meshConfig:
-          accessLogFile: /dev/stdout
-          defaultConfig:
-            envoyAccessLogService:
-              address: gloo-mesh-agent.gloo-mesh:9977
-            proxyMetadata:
-              ISTIO_META_DNS_CAPTURE: "true"
-              ISTIO_META_DNS_AUTO_ALLOCATE: "true"
-            proxyStatsMatcher:
-                inclusionRegexps:
-                  - ".*proxy_latency.*"
-        components:
-          pilot:
-            k8s:
-              env:
-                - name: PILOT_ENABLE_K8S_SELECT_WORKLOAD_ENTRIES
-                  value: "false"
-          ingressGateways:
-          - name: istio-ingressgateway
-            enabled: false
-EOF
-
-cat << EOF | kubectl --context ${CLUSTER1} apply -f -
-
-apiVersion: admin.gloo.solo.io/v2
-kind: GatewayLifecycleManager
-metadata:
-  name: cluster1-ingress
-  namespace: gloo-mesh
-spec:
-  installations:
-    - clusters:
-      - name: cluster1
-        activeGateway: false
-      gatewayRevision: ${OLD_REVISION}
-      istioOperatorSpec:
-        profile: empty
-        hub: us-docker.pkg.dev/gloo-mesh/istio-workshops
-        tag: 1.16.2-solo
-        values:
-          gateways:
-            istio-ingressgateway:
-              customService: true
-        components:
-          ingressGateways:
-            - name: istio-ingressgateway
-              namespace: istio-gateways
-              enabled: true
-              label:
-                istio: ingressgateway
-    - clusters:
-      - name: cluster1
-        activeGateway: false
-      gatewayRevision: ${NEW_REVISION}
-      istioOperatorSpec:
-        profile: empty
-        hub: us-docker.pkg.dev/gloo-mesh/istio-workshops
-        tag: 1.17.1-solo
-        values:
-          gateways:
-            istio-ingressgateway:
-              customService: true
-        components:
-          ingressGateways:
-            - name: istio-ingressgateway
-              namespace: istio-gateways
-              enabled: true
-              label:
-                istio: ingressgateway
----
-apiVersion: admin.gloo.solo.io/v2
-kind: GatewayLifecycleManager
-metadata:
-  name: cluster1-eastwest
-  namespace: gloo-mesh
-spec:
-  installations:
-    - clusters:
-      - name: cluster1
-        activeGateway: false
-      gatewayRevision: ${OLD_REVISION}
-      istioOperatorSpec:
-        profile: empty
-        hub: us-docker.pkg.dev/gloo-mesh/istio-workshops
-        tag: 1.16.2-solo
-        values:
-          gateways:
-            istio-ingressgateway:
-              customService: true
-        components:
-          ingressGateways:
-            - name: istio-eastwestgateway
-              namespace: istio-gateways
-              enabled: true
-              label:
-                istio: eastwestgateway
-                topology.istio.io/network: cluster1
-              k8s:
-                env:
-                  - name: ISTIO_META_ROUTER_MODE
-                    value: "sni-dnat"
-                  - name: ISTIO_META_REQUESTED_NETWORK_VIEW
-                    value: cluster1
-    - clusters:
-      - name: cluster1
-        activeGateway: false
-      gatewayRevision: ${NEW_REVISION}
-      istioOperatorSpec:
-        profile: empty
-        hub: us-docker.pkg.dev/gloo-mesh/istio-workshops
-        tag: 1.17.1-solo
-        values:
-          gateways:
-            istio-ingressgateway:
-              customService: true
-        components:
-          ingressGateways:
-            - name: istio-eastwestgateway
-              namespace: istio-gateways
-              enabled: true
-              label:
-                istio: eastwestgateway
-                topology.istio.io/network: cluster1
-              k8s:
-                env:
-                  - name: ISTIO_META_ROUTER_MODE
-                    value: "sni-dnat"
-                  - name: ISTIO_META_REQUESTED_NETWORK_VIEW
-                    value: cluster1
-EOF
-```
-
-Run the following command to check the status of the upgrade(s):
-
-```sh
-kubectl --context ${CLUSTER1} -n gloo-mesh get istiolifecyclemanager cluster1-installation -o yaml
-kubectl --context ${CLUSTER1} -n gloo-mesh get gatewaylifecyclemanager cluster1-ingress -o yaml
-```
-
-When the upgrade is completed, the state at the end of the objects will be `HEALTHY`.
-
-Now, let's restart all the Istio Pods to use the new revision:
-
-```bash
-kubectl --context ${CLUSTER1} get ns -l istio.io/rev=${OLD_REVISION} -o json | jq -r '.items[].metadata.name' | while read ns; do
-  kubectl --context ${CLUSTER1} label ns ${ns} istio.io/rev=${NEW_REVISION} --overwrite
-  kubectl --context ${CLUSTER1} -n ${ns} rollout restart deploy
-done
-kubectl --context ${CLUSTER1} -n httpbin patch deploy in-mesh --patch "{\"spec\": {\"template\": {\"metadata\": {\"labels\": {\"istio.io/rev\": \"${NEW_REVISION}\" }}}}}"
-```
-
-Test that you can still access the `in-mesh` service through the Istio Ingress Gateway corresponding to the old revision using the command below:
-
-```bash
-curl -k "https://${ENDPOINT_HTTPS_GW_CLUSTER1}/get" -I
-```
-
-You should get a response similar to the following one:
-
-```
-HTTP/2 200 
-server: istio-envoy
-date: Wed, 24 Aug 2022 14:58:22 GMT
-content-type: application/json
-content-length: 670
-access-control-allow-origin: *
-access-control-allow-credentials: true
-x-envoy-upstream-service-time: 7
-```
-
-All good, so we can now switch to the Istio gateways corresponding to the new revision:
-
-```bash
-kubectl --context ${CLUSTER1} -n istio-gateways patch svc istio-ingressgateway --patch "{\"spec\": {\"selector\": {\"revision\": \"${NEW_REVISION}\" }}}"
-```
-
-Test that you can still access the `in-mesh` service:
-
-```bash
-curl -k "https://${ENDPOINT_HTTPS_GW_CLUSTER1}/get" -I
-```
-
-You should get a response similar to the following one:
-
-```
-HTTP/2 200 
-server: istio-envoy
-date: Wed, 24 Aug 2022 14:58:22 GMT
-content-type: application/json
-content-length: 670
-access-control-allow-origin: *
-access-control-allow-credentials: true
-```
-
-Now that everything is working well with the new version, we can uninstall the previous version:
-
-```bash
-cat << EOF | kubectl --context ${CLUSTER1} apply -f -
-
-apiVersion: admin.gloo.solo.io/v2
-kind: IstioLifecycleManager
-metadata:
-  name: cluster1-installation
-  namespace: gloo-mesh
-spec:
-  installations:
-    - clusters:
-      - name: cluster1
-        defaultRevision: true
-      revision: ${NEW_REVISION}
-      istioOperatorSpec:
-        profile: minimal
-        hub: us-docker.pkg.dev/gloo-mesh/istio-workshops
-        tag: 1.17.1-solo
-        namespace: istio-system
-        values:
-          global:
-            meshID: mesh1
-            multiCluster:
-              clusterName: cluster1
-            network: cluster1
-        meshConfig:
-          accessLogFile: /dev/stdout
-          defaultConfig:
-            proxyMetadata:
-              ISTIO_META_DNS_CAPTURE: "true"
-              ISTIO_META_DNS_AUTO_ALLOCATE: "true"
-        components:
-          pilot:
-            k8s:
-              env:
-                - name: PILOT_ENABLE_K8S_SELECT_WORKLOAD_ENTRIES
-                  value: "false"
-          ingressGateways:
-          - name: istio-ingressgateway
-            enabled: false
-EOF
-
-cat << EOF | kubectl --context ${CLUSTER1} apply -f -
-
-apiVersion: admin.gloo.solo.io/v2
-kind: GatewayLifecycleManager
-metadata:
-  name: cluster1-ingress
-  namespace: gloo-mesh
-spec:
-  installations:
-    - clusters:
-      - name: cluster1
-        activeGateway: true
-      gatewayRevision: ${NEW_REVISION}
-      istioOperatorSpec:
-        profile: empty
-        hub: us-docker.pkg.dev/gloo-mesh/istio-workshops
-        tag: 1.17.1-solo
-        values:
-          gateways:
-            istio-ingressgateway:
-              customService: true
-        components:
-          ingressGateways:
-            - name: istio-ingressgateway
-              namespace: istio-gateways
-              enabled: true
-              label:
-                istio: ingressgateway
----
-apiVersion: admin.gloo.solo.io/v2
-kind: GatewayLifecycleManager
-metadata:
-  name: cluster1-eastwest
-  namespace: gloo-mesh
-spec:
-  installations:
-    - clusters:
-      - name: cluster1
-        activeGateway: false
-      gatewayRevision: ${NEW_REVISION}
-      istioOperatorSpec:
-        profile: empty
-        hub: us-docker.pkg.dev/gloo-mesh/istio-workshops
-        tag: 1.17.1-solo
-        values:
-          gateways:
-            istio-ingressgateway:
-              customService: true
-        components:
-          ingressGateways:
-            - name: istio-eastwestgateway
-              namespace: istio-gateways
-              enabled: true
-              label:
-                istio: eastwestgateway
-                topology.istio.io/network: cluster1
-              k8s:
-                env:
-                  - name: ISTIO_META_ROUTER_MODE
-                    value: "sni-dnat"
-                  - name: ISTIO_META_REQUESTED_NETWORK_VIEW
-                    value: cluster1
-EOF
-```
-
-Run the following command:
-
-```bash
-kubectl --context ${CLUSTER1} -n istio-system get pods && kubectl --context ${CLUSTER1} -n istio-gateways get pods
-```
-
-You should get the following output:
-
-```
-NAME                           READY   STATUS    RESTARTS   AGE
-istiod-1-17-577c47cf5c-m6mf4   1/1     Running   0          3m16s
-NAME                                          READY   STATUS    RESTARTS   AGE
-istio-eastwestgateway-1-17-7c7f4dbc9-j8qk5   1/1     Running   0          100s
-istio-ingressgateway-1-17-d64766d6b-bmpft    1/1     Running   0          100s
-```
-
-It confirms that only the new version is running.
-
-
