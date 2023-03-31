@@ -131,8 +131,8 @@ helm upgrade --install gloo-mesh-enterprise gloo-mesh-enterprise/gloo-mesh-enter
 --set glooMeshMgmtServer.ports.healthcheck=8091 \
 --set legacyMetricsPipeline.enabled=false \
 --set metricsgateway.enabled=true \
---set metricsgateway.service.type=LoadBalancer \
---set glooMeshUi.serviceType=LoadBalancer \
+--set metricsgateway.service.type=ClusterIP \
+--set glooMeshUi.serviceType=ClusterIP \
 --set mgmtClusterName=${CLUSTER1} \
 --set global.cluster=${CLUSTER1} \
 --set licenseKey=${GLOO_MESH_LICENSE_KEY}
