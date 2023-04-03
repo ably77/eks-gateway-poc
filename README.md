@@ -299,59 +299,14 @@ We're going to deploy the httpbin application to demonstrate several features of
 
 You can find more information about this application [here](http://httpbin.org/).
 
-Run the following commands to deploy the httpbin app on `cluster1`. The deployment will be called `not-in-mesh` and won't have the sidecar injected (because we don't label the namespace).
+First, you need to create a namespace for httpbin, with Istio injection enabled:
 
 ```bash
-kubectl --context ${CLUSTER1} create ns httpbin
-kubectl --context ${CLUSTER1} apply -n httpbin -f - <<EOF
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: not-in-mesh
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: not-in-mesh
-  labels:
-    app: not-in-mesh
-    service: not-in-mesh
-spec:
-  ports:
-  - name: http
-    port: 8000
-    targetPort: 80
-  selector:
-    app: not-in-mesh
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: not-in-mesh
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: not-in-mesh
-      version: v1
-  template:
-    metadata:
-      labels:
-        app: not-in-mesh
-        version: v1
-    spec:
-      serviceAccountName: not-in-mesh
-      containers:
-      - image: docker.io/kennethreitz/httpbin
-        imagePullPolicy: IfNotPresent
-        name: not-in-mesh
-        ports:
-        - containerPort: 80
-EOF
+kubectl --context ${CLUSTER1} create namespace httpbin
+kubectl --context ${CLUSTER1} label namespace httpbin istio-injection="enabled" --overwrite
 ```
 
-
-Then, we deploy a second version, which will be called `in-mesh` and will have the sidecar injected (because of the label `istio.io/rev` in the Pod template).
+Then, we deploy the httpbin app, which will be called `in-mesh` and will have the sidecar injected
 
 ```bash
 kubectl --context ${CLUSTER1} apply -n httpbin -f - <<EOF
@@ -390,7 +345,6 @@ spec:
       labels:
         app: in-mesh
         version: v1
-        sidecar.istio.io/inject: "true"
     spec:
       serviceAccountName: in-mesh
       containers:
@@ -402,7 +356,6 @@ spec:
 EOF
 ```
 
-
 You can follow the progress using the following command:
 
 ```
@@ -412,7 +365,6 @@ kubectl --context ${CLUSTER1} -n httpbin get pods
 ```
 NAME                           READY   STATUS    RESTARTS   AGE
 in-mesh-5d9d9549b5-qrdgd       2/2     Running   0          11s
-not-in-mesh-5c64bb49cd-m9kwm   1/1     Running   0          11s
 ```
 
 ## Lab 6 - Create the httpbin workspace <a name="lab-6---create-the-httpbin-workspace-"></a>
@@ -561,6 +513,20 @@ EOF
 ```
 
 You should now be able to access the `httpbin` application through the browser.
+
+Set the environment variable for the service corresponding to the Istio Ingress Gateway of the cluster:
+```bash
+export ENDPOINT_HTTP_GW_CLUSTER1=$(kubectl --context ${CLUSTER1} -n istio-system get svc -l istio=ingressgateway -o jsonpath='{.items[0].status.loadBalancer.ingress[0].*}'):80
+export ENDPOINT_HTTPS_GW_CLUSTER1=$(kubectl --context ${CLUSTER1} -n istio-system get svc -l istio=ingressgateway -o jsonpath='{.items[0].status.loadBalancer.ingress[0].*}'):443
+export HOST_GW_CLUSTER1=$(echo ${ENDPOINT_HTTP_GW_CLUSTER1} | cut -d: -f1)
+```
+
+Check that the variables have correct values:
+```bash
+echo $ENDPOINT_HTTP_GW_CLUSTER1
+echo $ENDPOINT_HTTPS_GW_CLUSTER1
+echo $HOST_GW_CLUSTER1
+```
 
 Get the URL to access the `httpbin` service using the following command:
 ```
