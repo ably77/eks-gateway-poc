@@ -1131,7 +1131,7 @@ EOF
 Now attempt to send an HTTPS request using only TLS and see how it fails:
 
 ```
-% curl -kv https://${ENDPOINT_HTTP_GW_CLUSTER1}/get --cert mtls-gateway/tls.crt --key mtls-gateway/tls.key
+% curl -kv https://${ENDPOINT_HTTPS_GW_CLUSTER1}/get --cert mtls-gateway/tls.crt --key mtls-gateway/tls.key
 ```
 
 You should see an error similar to below:
@@ -1181,12 +1181,12 @@ curl: (56) LibreSSL SSL_read: error:1404C418:SSL routines:ST_OK:tlsv1 alert unkn
 Now, attempt to curl again but this time provide the `mtls.crt` and `mtls.key` client certificate and private key
 
 ```
-curl -kv https://${ENDPOINT_HTTP_GW_CLUSTER1}/get --cert mtls-gateway/mtls.crt --key mtls-gateway/mtls.key
+curl -kv https://${ENDPOINT_HTTPS_GW_CLUSTER1}/get --cert mtls-gateway/mtls.crt --key mtls-gateway/mtls.key
 ```
 
 This should succeed
 ```
-% curl -kv https://${ENDPOINT_HTTP_GW_CLUSTER1}/get --cert mtls.crt --key mtls.key
+% curl -kv https://${ENDPOINT_HTTPS_GW_CLUSTER1}/get --cert mtls.crt --key mtls.key
 *   Trying 127.0.0.1:443...
 * Connected to localhost (127.0.0.1) port 443 (#0)
 * ALPN, offering h2
