@@ -17,10 +17,12 @@
 * [Lab 9 - Apply rate limiting to the Gateway](#lab-9---apply-rate-limiting-to-the-gateway-)
 * [Lab 10 - Exploring Istio, Envoy Proxy Config, and Metrics](#lab-10---exploring-istio-envoy-proxy-config-and-metrics-)
 * [Lab 11 - Exploring the Opentelemetry Pipeline](#lab-11---exploring-the-opentelemetry-pipeline-)
+* [Lab 12 - Configure a mutual TLS ingress gateway](#lab-12---configure-a-mutual-tls-ingress-gateway-)
+
 
 ## Labs that Require Solo Istio Images and included Solo Envoy Filters
-* [Lab 12 - Integrating with OPA](#lab-12---integrating-with-opa-)
-* [Lab 13 - Leveraging the Latency EnvoyFilter for additional performance metrics from our gateway](#lab-13---leveraging-the-latency-envoyfilter-for-additional-performance-metrics-from-our-gateway-)
+* [Lab 13 - Integrating with OPA](#lab-13---integrating-with-opa-)
+* [Lab 14 - Leveraging the Latency EnvoyFilter for additional performance metrics from our gateway](#lab-14---leveraging-the-latency-envoyfilter-for-additional-performance-metrics-from-our-gateway-)
 
 
 ## Introduction <a name="introduction"></a>
@@ -1059,11 +1061,235 @@ You can also query for metrics within the Prometheus UI, for example try to quer
 ![prometheus](images/observability/prometheus-ui.png)
 
 
+## Lab 12 - Configure a mutual TLS ingress gateway <a name="lab-12---configure-a-mutual-tls-ingress-gateway-"></a>
+
+Istio can be configured to verify downstream client certificates. This is done automatically if the gateway TLS secret used also contains a root CA. The server uses the CA certificate to verify its clients
+
+Let's generate a new set of TLS certs. For our example, we will create them in a new `mtls-gateway` directory
+
+```
+mkdir mtls-gateway
+
+# tls cert
+openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+   -keyout mtls-gateway/tls.key -out mtls-gateway/tls.crt -subj "/CN=*"
+
+# mtls cert
+openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+   -keyout mtls-gateway/mtls.key -out mtls-gateway/mtls.crt -subj "/CN=*"
+```
+
+Check that the new TLS certs were created
+
+```
+% ls mtls-gateway 
+mtls.crt        mtls.key        tls.crt         tls.key
+```
+
+Now we can create a new Kubernetes secret named `mtls-secret` using these certificates
+
+```
+kubectl create -n istio-gateways secret generic mtls-secret \
+  --from-file=tls.key=mtls-gateway/tls.key \
+  --from-file=tls.crt=mtls-gateway/tls.crt \
+  --from-file=ca.crt=mtls-gateway/mtls.crt
+```
+
+Update our existing VirtualGateway to use this `mtls-secret`, and set the `tls.mode` to `MUTUAL` to validate incoming client mTLS
+
+```bash
+kubectl --context ${CLUSTER1} apply -f - <<EOF
+apiVersion: networking.gloo.solo.io/v2
+kind: VirtualGateway
+metadata:
+  name: north-south-gw
+  namespace: istio-gateways
+spec:
+  workloads:
+    - selector:
+        labels:
+          istio: ingressgateway
+        cluster: cluster1
+  listeners: 
+    - http: {}
+      port:
+        number: 80
+      httpsRedirect: true
+    - http: {}
+      port:
+        number: 443
+# ---------------- mTLS config ---------------------------
+      tls:
+        mode: MUTUAL
+        secretName: mtls-secret
+# -------------------------------------------------------
+      allowedRouteTables:
+        - host: '*'
+EOF
+```
+
+Now attempt to send an HTTPS request using only TLS and see how it fails:
+
+```
+% curl -kv https://${ENDPOINT_HTTP_GW_CLUSTER1}/get --cert mtls-gateway/tls.crt --key mtls-gateway/tls.key
+```
+
+You should see an error similar to below:
+```
+*   Trying 127.0.0.1:443...
+* Connected to localhost (127.0.0.1) port 443 (#0)
+* ALPN, offering h2
+* ALPN, offering http/1.1
+* successfully set certificate verify locations:
+*  CAfile: /etc/ssl/cert.pem
+*  CApath: none
+* (304) (OUT), TLS handshake, Client hello (1):
+* (304) (IN), TLS handshake, Server hello (2):
+* (304) (IN), TLS handshake, Unknown (8):
+* (304) (IN), TLS handshake, Request CERT (13):
+* (304) (IN), TLS handshake, Certificate (11):
+* (304) (IN), TLS handshake, CERT verify (15):
+* (304) (IN), TLS handshake, Finished (20):
+* (304) (OUT), TLS handshake, Certificate (11):
+* (304) (OUT), TLS handshake, CERT verify (15):
+* (304) (OUT), TLS handshake, Finished (20):
+* SSL connection using TLSv1.3 / AEAD-CHACHA20-POLY1305-SHA256
+* ALPN, server accepted to use h2
+* Server certificate:
+*  subject: CN=*
+*  start date: Apr 10 15:52:40 2023 GMT
+*  expire date: Apr  9 15:52:40 2024 GMT
+*  issuer: CN=*
+*  SSL certificate verify result: self signed certificate (18), continuing anyway.
+* Using HTTP2, server supports multiplexing
+* Connection state changed (HTTP/2 confirmed)
+* Copying HTTP/2 data in stream buffer to connection buffer after upgrade: len=0
+* Using Stream ID: 1 (easy handle 0x11800ca00)
+> GET /get HTTP/2
+> Host: httpbin-local.glootest.com
+> user-agent: curl/7.79.1
+> accept: */*
+> 
+* LibreSSL SSL_read: error:1404C418:SSL routines:ST_OK:tlsv1 alert unknown ca, errno 0
+* Failed receiving HTTP2 data
+* LibreSSL SSL_write: SSL_ERROR_SYSCALL, errno 0
+* Failed sending HTTP2 data
+* Connection #0 to host localhost left intact
+curl: (56) LibreSSL SSL_read: error:1404C418:SSL routines:ST_OK:tlsv1 alert unknown ca, errno 0
+```
+
+Now, attempt to curl again but this time provide the `mtls.crt` and `mtls.key` client certificate and private key
+
+```
+curl -kv https://${ENDPOINT_HTTP_GW_CLUSTER1}/get --cert mtls-gateway/mtls.crt --key mtls-gateway/mtls.key
+```
+
+This should succeed
+```
+% curl -kv https://${ENDPOINT_HTTP_GW_CLUSTER1}/get --cert mtls.crt --key mtls.key
+*   Trying 127.0.0.1:443...
+* Connected to localhost (127.0.0.1) port 443 (#0)
+* ALPN, offering h2
+* ALPN, offering http/1.1
+* successfully set certificate verify locations:
+*  CAfile: /etc/ssl/cert.pem
+*  CApath: none
+* (304) (OUT), TLS handshake, Client hello (1):
+* (304) (IN), TLS handshake, Server hello (2):
+* (304) (IN), TLS handshake, Unknown (8):
+* (304) (IN), TLS handshake, Request CERT (13):
+* (304) (IN), TLS handshake, Certificate (11):
+* (304) (IN), TLS handshake, CERT verify (15):
+* (304) (IN), TLS handshake, Finished (20):
+* (304) (OUT), TLS handshake, Certificate (11):
+* (304) (OUT), TLS handshake, CERT verify (15):
+* (304) (OUT), TLS handshake, Finished (20):
+* SSL connection using TLSv1.3 / AEAD-CHACHA20-POLY1305-SHA256
+* ALPN, server accepted to use h2
+* Server certificate:
+*  subject: CN=*
+*  start date: Apr 10 15:52:40 2023 GMT
+*  expire date: Apr  9 15:52:40 2024 GMT
+*  issuer: CN=*
+*  SSL certificate verify result: self signed certificate (18), continuing anyway.
+* Using HTTP2, server supports multiplexing
+* Connection state changed (HTTP/2 confirmed)
+* Copying HTTP/2 data in stream buffer to connection buffer after upgrade: len=0
+* Using Stream ID: 1 (easy handle 0x130012e00)
+> GET /get HTTP/2
+> Host: httpbin-local.glootest.com
+> user-agent: curl/7.79.1
+> accept: */*
+> 
+* Connection state changed (MAX_CONCURRENT_STREAMS == 2147483647)!
+< HTTP/2 200 
+< server: istio-envoy
+< date: Mon, 10 Apr 2023 16:59:05 GMT
+< content-type: application/json
+< access-control-allow-origin: *
+< access-control-allow-credentials: true
+< x-envoy-upstream-service-time: 9
+< content-length: 1974
+< 
+{
+  "args": {}, 
+  "headers": {
+    "Accept": "*/*", 
+    "Host": "httpbin-local.glootest.com", 
+    "User-Agent": "curl/7.79.1", 
+    "X-B3-Parentspanid": "bda0797f91efc059", 
+    "X-B3-Sampled": "0", 
+    "X-B3-Spanid": "2ca32dfa3081f9e6", 
+    "X-B3-Traceid": "cf8ef719219f3093bda0797f91efc059", 
+    "X-Envoy-Attempt-Count": "1", 
+    "X-Envoy-Internal": "true", 
+    "X-Forwarded-Client-Cert": "Hash=12918ade28133e2af82c13758baba46a3ebbfb86693fa5ae0d9f4c4198942bc9;Cert=\"-----BEGIN%20CERTIFICATE-----%0AMIIC%2BTCCAeGgAwIBAgIUY0DWKWCz5iYfcmbjnwX1MIwaj7wwDQYJKoZIhvcNAQEL%0ABQAwDDEKMAgGA1UEAwwBKjAeFw0yMzA0MTAxNTUyNDNaFw0yNDA0MDkxNTUyNDNa%0AMAwxCjAIBgNVBAMMASowggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQCT%0AD6kdIWO1ZUPKLzpAJ3KXrYl%2F6CDZDfHYb5iCf%2BkdwymlJ%2FL3FqNBk6ufg27N69OW%0AK2N%2FkHa707E6%2FFysH4qX%2FbJ2nCC4CDxiTU972y56sduHkpv7%2F%2FpkgUD2Cwir0j%2FH%0AOrmsEo60XZq4hsFVX7XMs4MojhW1IojVvcANj5x8wV16%2Bs6Pfbstw5dtf86zVRqT%0AoOXLnlE%2FMZ0LjFg%2FJxetEwD9RpMXIZp44uriPk4Ja0Q0RJ2hzBhbPah8J77FcuC2%0AAii1OLQwGHgcCQQQ%2FLKs1ZRO07WAqgGibQytCGGWScxX2cNW3%2BgslvbEVAno2XGG%0ABGdTq30DhL7u%2FCILB6XnAgMBAAGjUzBRMB0GA1UdDgQWBBRD7km0jt7S1Ry%2FZ9T2%0Azl8KJ%2F1bmTAfBgNVHSMEGDAWgBRD7km0jt7S1Ry%2FZ9T2zl8KJ%2F1bmTAPBgNVHRMB%0AAf8EBTADAQH%2FMA0GCSqGSIb3DQEBCwUAA4IBAQBnU5hnCnghSQHFOiBWYcmGRdkU%0APtoXTM6KVIxzS%2F11DokIfiIp9mVbUpx3i%2BYSKY8NQ6%2BkyNkWQkrWaVDumn%2Fk6Q0s%0A%2F2uJ3H6L6Wv0xavudG7Jz5iqiTTJG%2FEBfEhaXffyHxjsq69wu4a3GAQ4WPvA%2BnhX%0AY%2FQBLlP%2BCbtrFBFlx%2F0TLyPnSJ2YvuGe53FV3341r1N9%2BlM6%2FrC6xVzHHWt0u%2BVO%0AS3qFbTTWKFWqFD1u6KiOzm6DrIOJCdej7X1ZHNYKx4WsPQ6fpZlzYECPsx%2FbnS7F%0AN6Nb1AtqxEdqE6gVAzg7UX9uuNAi8VbQbwxddvxpk5LtahZ1b3lWjsPYVLnR%0A-----END%20CERTIFICATE-----%0A\";Subject=\"CN=*\";URI=,By=spiffe://mgmt/ns/httpbin/sa/in-mesh;Hash=ed5b55e8df6f9845f52506d6e760d242f475ff84a0a551d97a988073b54868a2;Subject=\"\";URI=spiffe://mgmt/ns/istio-gateways/sa/istio-ingressgateway-1-16"
+  }, 
+  "origin": "10.42.0.1", 
+  "url": "https://httpbin-local.glootest.com/get"
+}
+* Connection #0 to host localhost left intact
+```
+
+To revert back to our original TLS gateway configuration you can apply the config below
+
+```bash
+kubectl --context ${CLUSTER1} apply -f - <<EOF
+apiVersion: networking.gloo.solo.io/v2
+kind: VirtualGateway
+metadata:
+  name: north-south-gw
+  namespace: istio-gateways
+spec:
+  workloads:
+    - selector:
+        labels:
+          istio: ingressgateway
+        cluster: cluster1
+  listeners: 
+    - http: {}
+      port:
+        number: 80
+      httpsRedirect: true
+    - http: {}
+      port:
+        number: 443
+# ---------------- SSL config ---------------------------
+      tls:
+        mode: SIMPLE
+        secretName: tls-secret
+# -------------------------------------------------------
+      allowedRouteTables:
+        - host: '*'
+EOF
+```
+
+
 
 
 ## Labs that Require Solo Istio Images and included Solo Envoy Filters
 
-## Lab 12 - Integrating with OPA <a name="lab-12---integrating-with-opa-"></a>
+## Lab 13 - Integrating with OPA <a name="lab-13---integrating-with-opa-"></a>
 
 ### OPA inputs
 You can also perform authorization using OPA. Gloo Mesh's OPA integration populates an input document to use in your OPA policies which allows you to easily write rego policy
@@ -1308,7 +1534,7 @@ This diagram shows the flow of the request (with the Istio ingress gateway lever
 
 ![Gloo Mesh Dashboard OIDC](images/arch/arch-1c.png)
 
-## Lab 13 - Leveraging the Latency EnvoyFilter for additional performance metrics from our gateway <a name="lab-13---leveraging-the-latency-envoyfilter-for-additional-performance-metrics-from-our-gateway-"></a>
+## Lab 14 - Leveraging the Latency EnvoyFilter for additional performance metrics from our gateway <a name="lab-14---leveraging-the-latency-envoyfilter-for-additional-performance-metrics-from-our-gateway-"></a>
 
 The Solo Istio images are packaged with an additional proxy latency filter that measures the latency incurred by the filter chain in a histogram. We can use this latency filter by deploying an `EnvoyFilter` in Istio
 
