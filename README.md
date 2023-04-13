@@ -347,6 +347,8 @@ spec:
       labels:
         app: in-mesh
         version: v1
+      annotations:
+        sidecar.istio.io/inject: "true"
     spec:
       serviceAccountName: in-mesh
       containers:
