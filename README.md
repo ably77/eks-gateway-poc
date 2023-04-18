@@ -753,7 +753,7 @@ EOF
 
 Now when you access your httpbin app through the browser, it will be protected by the OIDC provider login page.
 ```
-echo "https://${ENDPOINT_HTTPS_GW_CLUSTER1}/get"
+echo "${APP_CALLBACK_URL}/get"
 ```
 
 ### User Credentials
