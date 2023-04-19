@@ -19,10 +19,12 @@
 * [Lab 11 - Exploring Istio, Envoy Proxy Config, and Metrics](#lab-11---exploring-istio-envoy-proxy-config-and-metrics-)
 * [Lab 12 - Exploring the Opentelemetry Pipeline](#lab-12---exploring-the-opentelemetry-pipeline-)
 * [Lab 13 - Configure a mutual TLS ingress gateway](#lab-13---configure-a-mutual-tls-ingress-gateway-)
+* [Lab 14 - Enable JWT Validation at the Gateway](#lab-14---enable-jwt-validation-at-the-gateway-)
+
 
 
 ## Labs that Require Solo Istio Images and included Solo Envoy Filters
-* [Lab 14 - Leveraging the Latency EnvoyFilter for additional performance metrics from our gateway](#lab-14---leveraging-the-latency-envoyfilter-for-additional-performance-metrics-from-our-gateway-)
+* [Lab 16 - Leveraging the Latency EnvoyFilter for additional performance metrics from our gateway](#lab-16---leveraging-the-latency-envoyfilter-for-additional-performance-metrics-from-our-gateway-)
 
 
 ## Introduction <a name="introduction"></a>
@@ -1531,12 +1533,190 @@ spec:
 EOF
 ```
 
+## Lab 14 - Enable JWT Validation at the Gateway <a name="lab-14---enable-jwt-validation-at-the-gateway-"></a>
+
+In this lab, we will enable JWT validation at the gateway using the Istio `RequestAuthentication` and `AuthorizationPolicy` CRDs. This lab uses the test token [JWT test](https://raw.githubusercontent.com/istio/istio/release-1.17/security/tools/jwt/samples/demo.jwt) and [JWKS endpoint](https://raw.githubusercontent.com/istio/istio/release-1.17/security/tools/jwt/samples/jwks.json) from the Istio code base. Note that the JWT must correspond to the JWKS endpoint you want to use. 
+
+### Enable Permissive JWT Validation
+
+First we can apply the `RequestAuthentication` policy. The policy below shows two methods of providing the jwks public key set
+
+- jwks: JSON Web Key Set of public keys to validate signature of the JWT
+- jwksUri: URL of the provider’s public key set to validate signature of the JWT.
+
+Note: Only one of `jwksUri` and `jwks` should be used.
+
+The following example uses the `jwksUri` method. However if you would like to test the `jwks` method, you can just uncomment the required parameters below and re-apply
+
+```bash
+kubectl --context ${CLUSTER1} apply -f - <<EOF
+apiVersion: security.istio.io/v1beta1
+kind: RequestAuthentication
+metadata:
+  name: "gateway-jwt-validation"
+  namespace: istio-gateways
+spec:
+  selector:
+    matchLabels:
+      istio: ingressgateway
+  jwtRules:
+  - issuer: "testing@secure.istio.io"
+    # NOTE: only one of jwks or jwksUri can be used
+    # uncomment to provide jwks inline
+    #jwks: |
+    #  { "{ "keys":[ {"e":"AQAB","kid":"DHFbpoIUqrY8t2zpA2qXfCmr5VO5ZEr4RzHU_-envvQ","kty":"RSA","n":"xAE7eB6qugXyCAG3yhh7pkDkT65pHymX-P7KfIupjf59vsdo91bSP9C8H07pSAGQO1MV_xFj9VswgsCg4R6otmg5PV2He95lZdHtOcU5DXIg_pbhLdKXbi66GlVeK6ABZOUW3WYtnNHD-91gVuoeJT_DwtGGcp4ignkgXfkiEm4sw-4sfb4qdt5oLbyVpmW6x9cfa7vs2WTfURiCrBoUqgBo_-4WTiULmmHSGZHOjzwa8WtrtOQGsAFjIbno85jp6MnGGGZPYZbDAa_b3y5u-YpW7ypZrvD8BgtKVjgtQgZhLAGezMt0ua3DRrWnKqTZ0BJ_EyxOGuHJrLsn00fnMQ"}]}" }]}
+    # uncomment to provide jwksUri
+    jwksUri: "https://raw.githubusercontent.com/istio/istio/release-1.17/security/tools/jwt/samples/jwks.json"
+EOF
+```
+
+If you provide a token in the authorization header, its implicitly default location, Istio validates the token using the public key set, and rejects requests if the bearer token is invalid. However, take note that requests without tokens are accepted. To observe this behavior, retry the request without a token, with a bad token, and with a valid token:
+
+Example curl command with no token - output should be `200`
+
+```bash
+curl -kI https://${ENDPOINT_HTTPS_GW_CLUSTER1}/get"
+```
+
+output:
+
+```
+HTTP/2 200 
+server: istio-envoy
+date: Wed, 19 Apr 2023 18:31:29 GMT
+content-type: application/json
+content-length: 503
+access-control-allow-origin: *
+access-control-allow-credentials: true
+x-envoy-upstream-service-time: 7
+```
+
+Example curl command with a bad token - output should be `401`
+
+```bash
+curl -kI https://${ENDPOINT_HTTPS_GW_CLUSTER1}/get --header "Authorization: Bearer badtoken"
+```
+
+output:
+
+```
+HTTP/2 401 
+www-authenticate: Bearer realm="https://httpbin-local.glootest.com/get", error="invalid_token"
+content-length: 79
+content-type: text/plain
+date: Wed, 19 Apr 2023 18:31:58 GMT
+server: istio-envoy
+```
+
+Example curl command with valid token - output should be `200`
+
+```bash
+TOKEN=$(curl https://raw.githubusercontent.com/istio/istio/release-1.17/security/tools/jwt/samples/demo.jwt -s)
+
+curl -kI https://${ENDPOINT_HTTPS_GW_CLUSTER1}/get --header "Authorization: Bearer $TOKEN"
+```
+
+output:
+
+```
+HTTP/2 200 
+server: istio-envoy
+date: Wed, 19 Apr 2023 18:32:18 GMT
+content-type: application/json
+content-length: 503
+access-control-allow-origin: *
+access-control-allow-credentials: true
+x-envoy-upstream-service-time: 6
+```
+
+By default, Istio runs these Authentication policy checks in permissive mode. Meaning you can send a request if you provide a valid token or provide no token at all. It helps you in the gradual migration process when you are moving to an Istio-based system. Not blocking your entire operation by being too strict.
+
+### Enable Strict JWT Validation
+
+To reject requests without valid tokens, add an `AuthorizationPolicy` with a rule specifying a `DENY` action for requests without request principals. Request principals are available only when valid JWT tokens are provided. The following rule therefore denies requests without valid tokens.
+
+```bash
+kubectl --context ${CLUSTER1} apply -f - <<EOF
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: "gateway-require-jwt"
+  namespace: istio-system
+spec:
+  selector:
+    matchLabels:
+      istio: ingressgateway
+  action: DENY
+  rules:
+  - from:
+    - source:
+        notRequestPrincipals: ["*"]
+EOF
+```
+
+Now let's try our test again
+
+Example curl command with no token - output should now be `403` because no token was presented
+
+```bash
+curl -kI https://${ENDPOINT_HTTPS_GW_CLUSTER1}/get"
+```
+
+output:
+
+```
+HTTP/2 403 
+content-length: 19
+content-type: text/plain
+date: Wed, 19 Apr 2023 19:09:22 GMT
+server: istio-envoy
+```
+
+Example curl command with a bad token - output should be `401`
+
+```bash
+curl -kI https://${ENDPOINT_HTTPS_GW_CLUSTER1}/get --header "Authorization: Bearer badtoken"
+```
+
+output:
+
+```
+HTTP/2 401 
+www-authenticate: Bearer realm="https://httpbin-local.glootest.com/get", error="invalid_token"
+content-length: 79
+content-type: text/plain
+date: Wed, 19 Apr 2023 18:31:58 GMT
+server: istio-envoy
+```
+
+Example curl command with valid token - output should be `200`
+
+```bash
+TOKEN=$(curl https://raw.githubusercontent.com/istio/istio/release-1.17/security/tools/jwt/samples/demo.jwt -s)
+
+curl -kI https://${ENDPOINT_HTTPS_GW_CLUSTER1}/get --header "Authorization: Bearer $TOKEN"
+```
+
+output:
+
+```
+HTTP/2 200 
+server: istio-envoy
+date: Wed, 19 Apr 2023 18:32:18 GMT
+content-type: application/json
+content-length: 503
+access-control-allow-origin: *
+access-control-allow-credentials: true
+x-envoy-upstream-service-time: 6
+```
+
+
 
 
 
 ## Labs that Require Solo Istio Images and included Solo Envoy Filters
 
-## Lab 14 - Leveraging the Latency EnvoyFilter for additional performance metrics from our gateway <a name="lab-14---leveraging-the-latency-envoyfilter-for-additional-performance-metrics-from-our-gateway-"></a>
+## Lab 16 - Leveraging the Latency EnvoyFilter for additional performance metrics from our gateway <a name="lab-16---leveraging-the-latency-envoyfilter-for-additional-performance-metrics-from-our-gateway-"></a>
 
 The Solo Istio images are packaged with an additional proxy latency filter that measures the latency incurred by the filter chain in a histogram. We can use this latency filter by deploying an `EnvoyFilter` in Istio
 
