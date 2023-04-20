@@ -1722,7 +1722,7 @@ With passthrough external auth, you can integrate with existing auth implementat
 
 The [Passthrough External Auth](https://docs.solo.io/gloo-gateway/latest/policies/external-auth/passthrough/) example provides a sample `extauth-grpcservice` that is configured as a `Deployment`. A high level architecture diagram of the flow looks like this
 
-![](images/extauth/passthrough1.png)
+![](images/extauth/passthrough1b.png)
 
 In our lab example, we will continue to use the same sample service - however this time we will deploy it as a `Sidecar` on our `ext-auth-service` deployment. A high level architecture diagram of the flow looks like this
 
