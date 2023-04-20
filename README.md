@@ -20,6 +20,7 @@
 * [Lab 12 - Exploring the Opentelemetry Pipeline](#lab-12---exploring-the-opentelemetry-pipeline-)
 * [Lab 13 - Configure a mutual TLS ingress gateway](#lab-13---configure-a-mutual-tls-ingress-gateway-)
 * [Lab 14 - Enable JWT Validation at the Gateway](#lab-14---enable-jwt-validation-at-the-gateway-)
+* [Lab 15 - Using Passthrough External Auth](#lab-15---using-passthrough-external-auth-)
 
 
 
@@ -1710,7 +1711,227 @@ access-control-allow-credentials: true
 x-envoy-upstream-service-time: 6
 ```
 
+## Lab 15 - Using Passthrough External Auth <a name="lab-15---using-passthrough-external-auth-"></a>
 
+This example will be used to demonstrate how we can leverage [Passthrough External Auth](https://docs.solo.io/gloo-gateway/latest/policies/external-auth/passthrough/) to authenticate requests with an external auth server
+
+Benefits of passthrough external auth: 
+With passthrough external auth, you can integrate with existing auth implementations, while still being able to use other Gloo Gateway external auth implementations, such as OIDC and API key auth.
+
+### Authorization Server as a Sidecar
+
+The [Passthrough External Auth](https://docs.solo.io/gloo-gateway/latest/policies/external-auth/passthrough/) example provides a sample `extauth-grpcservice` that is configured as a `Deployment`. A high level architecture diagram of the flow looks like this
+
+![](images/extauth/passthrough1.png)
+
+In our lab example, we will continue to use the same sample service - however this time we will deploy it as a `Sidecar` on our `ext-auth-service` deployment. A high level architecture diagram of the flow looks like this
+
+![](images/extauth/passthrough2.png)
+
+First, let's clean up any policies that may already exist from previous labs
+```bash
+kubectl --context ${CLUSTER1} -n httpbin delete ExtAuthPolicy httpbin-opa
+kubectl --context ${CLUSTER1} -n httpbin delete ExtAuthPolicy httpbin-keycloak-extauth
+```
+
+If we have already deployed the `ext-auth-server` as a part of Gloo Mesh Addons deployment, lets remove it, so that we can re-deploy the `ext-auth-server` with our Sidecar. To do this we can just update our helm values with `ext-auth-service.enabled=false` and run a `helm upgrade` command. If you  have not yet deployed the Gloo Mesh Addons, you can still continue to use the same commands below.
+
+```bash
+kubectl --context ${CLUSTER1} create namespace gloo-mesh-addons
+kubectl --context ${CLUSTER1} label namespace gloo-mesh-addons istio.io/rev=1-16 --overwrite
+
+helm upgrade --install gloo-mesh-agent-addons gloo-mesh-agent/gloo-mesh-agent \
+  --namespace gloo-mesh-addons \
+  --kube-context=${CLUSTER1} \
+  --set cluster=cluster1 \
+  --set glooMeshAgent.enabled=false \
+  --set glooMeshPortalServer.enabled=true \
+  --set rate-limiter.enabled=true \
+  --set ext-auth-service.enabled=false \
+  --version 2.2.6
+```
+
+Check to see that the `ext-auth-service` does not exist
+
+```bash
+kubectl --context ${CLUSTER1} get pods -n gloo-mesh-addons
+```
+
+output should look like this
+
+```bash
+% kubectl --context ${CLUSTER1} get pods -n gloo-mesh-addons
+NAME                                READY   STATUS             RESTARTS     AGE
+redis-578865fd78-l2kg2              2/2     Running            0            90s
+rate-limiter-64b64b779c-zrjrt       2/2     Running            0            90s
+```
+
+Now we can re-deploy our `ext-auth-service` with our example auth service attached as a sidecar
+
+```bash
+kubectl --context ${CLUSTER1} apply -f example-config/extauth-w-sidecar-2.2.6.yaml
+```
+
+Check to see that the `ext-auth-service` is now deployed
+
+```bash
+kubectl --context ${CLUSTER1} get pods -n gloo-mesh-addons
+```
+
+output should look like this
+
+```bash
+% kubectl --context ${CLUSTER1} get pods -n gloo-mesh-addons 
+NAME                                READY   STATUS    RESTARTS   AGE
+redis-578865fd78-g2nks              2/2     Running   0          2m28s
+rate-limiter-64b64b779c-mchrk       2/2     Running   0          2m28s
+ext-auth-service-5b75869754-zjrtk   3/3     Running   0          29s
+```
+
+Notice that our `ext-auth-service` now has 3/3 containers in the pod with the addition of our `extauth-grpcservice` Sidecar
+
+
+If you haven't done so already in a previous lab, make sure our `ExtAuthServer` CRD is configured 
+
+```bash
+kubectl --context ${CLUSTER1} apply -f - <<EOF
+apiVersion: admin.gloo.solo.io/v2
+kind: ExtAuthServer
+metadata:
+  name: cluster1-ext-auth-server
+  namespace: httpbin
+spec:
+  destinationServer:
+    ref:
+      cluster: cluster1
+      name: ext-auth-service
+      namespace: gloo-mesh-addons
+    port:
+      name: grpc
+EOF
+```
+
+Next, we can apply our Passthrough Auth policy
+```bash
+kubectl --context ${CLUSTER1} apply -f - <<EOF
+apiVersion: security.policy.gloo.solo.io/v2
+kind: ExtAuthPolicy
+metadata:
+  name: passthrough-auth
+  namespace: httpbin
+spec:
+  applyToRoutes:
+  - route:
+      labels:
+        auth: passthrough
+  config:
+    glooAuth:
+      configs:
+      - passThroughAuth:
+          grpc:
+            # custom auth server is a sidecar in the ext-auth-server deployment
+            address: localhost:9001
+    server:
+      name: cluster1-ext-auth-server
+      namespace: httpbin
+      cluster: cluster1
+EOF
+```
+
+Lastly, we need to update our route table with our ExtAuthPolicy route label `auth: passthrough`
+
+```bash
+kubectl --context ${CLUSTER1} apply -f - <<EOF
+apiVersion: networking.gloo.solo.io/v2
+kind: RouteTable
+metadata:
+  name: httpbin
+  namespace: httpbin
+  labels:
+    expose: "true"
+spec:
+  http:
+    - name: httpbin
+      labels:
+        auth: passthrough
+      matchers:
+      - uri:
+          exact: /
+      - uri:
+          prefix: /get
+      - uri:
+          prefix: /anything
+      - uri:
+          prefix: /callback
+      forwardTo:
+        destinations:
+        - ref:
+            name: in-mesh
+            namespace: httpbin
+          port:
+            number: 8000
+EOF
+```
+
+Now we should be able to test our passthrough ext auth by providing the header `authorization: authorize me` in our request
+
+First without - output should be `403 You don't have authorization to view this page`
+
+```bash
+curl -kI https://${ENDPOINT_HTTPS_GW_CLUSTER1}/get
+```
+
+output:
+
+```bash
+HTTP/2 403 
+date: Thu, 20 Apr 2023 00:09:07 GMT
+server: istio-envoy
+```
+
+Then with - output should be `200`
+
+```bash
+curl -kI https://${ENDPOINT_HTTPS_GW_CLUSTER1}/get --header "Authorization: authorize me"
+```
+
+output:
+
+```bash
+HTTP/2 200 
+server: istio-envoy
+date: Thu, 20 Apr 2023 00:09:56 GMT
+content-type: application/json
+content-length: 743
+access-control-allow-origin: *
+access-control-allow-credentials: true
+x-envoy-upstream-service-time: 7
+```
+
+If you take a look at the logs of our `grpc-extauth` Sidecar, we can see that it is denying the request
+
+Run the following command to view the logs
+
+```bash
+kubectl --context ${CLUSTER1} logs -n gloo-mesh-addons deploy/ext-auth-service -c grpc-extauth
+```
+
+Output should look similar to below
+
+```bash
+% kubectl --context ${CLUSTER1} logs -n gloo-mesh-addons deploy/ext-auth-service -c grpc-extauth
+2023/04/19 23:54:41 starting gRPC server on: 9001
+2023/04/20 00:08:51 Request does not have correct authorization header
+2023/04/20 00:09:07 Request does not have correct authorization header
+2023/04/20 00:09:56 Recieved request with correct authorization header
+2023/04/20 00:10:53 Recieved request with correct authorization header
+2023/04/20 00:11:43 Recieved request with correct authorization header
+```
+
+### Next Steps
+As a next step to this exercise, we can swap the example `grpc-extauth` Sidecar container with an OPA sidecar to handle our authorization with the same Passthrough External Auth workflow. The architecture will look similar to below
+
+![](images/extauth/passthrough3.png)
 
 
 
