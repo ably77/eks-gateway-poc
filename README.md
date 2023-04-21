@@ -1730,6 +1730,7 @@ In our lab example, we will continue to use the same sample service - however th
 
 First, let's clean up any policies that may already exist from previous labs
 ```bash
+kubectl --context ${CLUSTER1} -n httpbin delete ExtAuthPolicy httpbin-extauth
 kubectl --context ${CLUSTER1} -n httpbin delete ExtAuthPolicy httpbin-opa
 kubectl --context ${CLUSTER1} -n httpbin delete ExtAuthPolicy httpbin-keycloak-extauth
 ```
