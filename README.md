@@ -235,6 +235,9 @@ glooMeshAgent:
   enabled: false
 rate-limiter:
   enabled: true
+  extraTemplateAnnotations:
+    proxy.istio.io/config: '{ "holdApplicationUntilProxyStarts": true }'
+    sidecar.istio.io/inject: "true"
 ext-auth-service:
   enabled: true
   extraTemplateAnnotations:
@@ -1745,7 +1748,7 @@ If we have already deployed the `ext-auth-server` as a part of Gloo Mesh Addons 
 
 ```bash
 kubectl --context ${CLUSTER1} create namespace gloo-mesh-addons
-kubectl --context ${CLUSTER1} label namespace gloo-mesh-addons istio.io/rev=1-16 --overwrite
+kubectl --context ${CLUSTER1} label namespace gloo-mesh-addons istio-injection="enabled" --overwrite
 
 helm upgrade --install gloo-mesh-agent-addons gloo-mesh-agent/gloo-mesh-agent \
 --namespace gloo-mesh-addons \
@@ -1756,6 +1759,9 @@ glooMeshAgent:
   enabled: false
 rate-limiter:
   enabled: true
+  extraTemplateAnnotations:
+    proxy.istio.io/config: '{ "holdApplicationUntilProxyStarts": true }'
+    sidecar.istio.io/inject: "true"
 ext-auth-service:
   enabled: false
 EOF
