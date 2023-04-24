@@ -770,7 +770,7 @@ echo "${APP_CALLBACK_URL}/get"
 
 ### User Credentials
 If you are using the example client config above, below are a few users that you can validate with
-- Username: jdoe@solo.io // Password: gloo-admin
+- Username: jdoe@solo.io // Password: gloo-dev
 - Username: test@solo.io // Password: gloo-public
 - Username: jdoe@gmail.com // Password: gloo-public
 
