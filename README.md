@@ -227,14 +227,20 @@ Then, you can deploy the addons on the cluster(s) using Helm:
 
 ```bash
 helm upgrade --install gloo-mesh-agent-addons gloo-mesh-agent/gloo-mesh-agent \
-  --namespace gloo-mesh-addons \
-  --kube-context=${CLUSTER1} \
-  --set cluster=cluster1 \
-  --set glooMeshAgent.enabled=false \
-  --set glooMeshPortalServer.enabled=true \
-  --set rate-limiter.enabled=true \
-  --set ext-auth-service.enabled=true \
-  --version 2.2.6
+--namespace gloo-mesh-addons \
+--kube-context=${CLUSTER1} \
+--version 2.2.6 \
+--values - <<EOF
+glooMeshAgent:
+  enabled: false
+rate-limiter:
+  enabled: true
+ext-auth-service:
+  enabled: true
+  extraTemplateAnnotations:
+    proxy.istio.io/config: '{ "holdApplicationUntilProxyStarts": true }'
+    sidecar.istio.io/inject: "true"
+EOF
 ```
 
 This is how to environment looks like now:
