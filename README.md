@@ -1039,10 +1039,9 @@ metadata:
 spec:
   raw:
     rateLimits:
-    - actions:
-      - genericKey:
-          descriptorValue: "per-minute"
-      - remoteAddress: {}
+      - actions:
+          - genericKey:
+              descriptorValue: counter
 EOF
 ```
 
@@ -1068,12 +1067,10 @@ spec:
   raw:
     descriptors:
       - key: generic_key
-        value: "per-minute"
-        descriptors:
-          - key: remote_address
-            rateLimit:
-              requestsPerUnit: 5
-              unit: MINUTE
+        rateLimit:
+          requestsPerUnit: 5
+          unit: MINUTE
+        value: counter
 EOF
 ```
 
