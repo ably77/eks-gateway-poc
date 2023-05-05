@@ -21,11 +21,14 @@
 * [Lab 13 - Configure a mutual TLS ingress gateway](#lab-13---configure-a-mutual-tls-ingress-gateway-)
 * [Lab 14 - Enable JWT Validation at the Gateway](#lab-14---enable-jwt-validation-at-the-gateway-)
 * [Lab 15 - Using Passthrough External Auth](#lab-15---using-passthrough-external-auth-)
+* [Lab 16 - Routing to a GRPC Service](#lab-16---routing-to-a-grpc-service-)
+* [Lab 17 - Securing GRPC Service with ExtAuthPolicy](#lab-17---securing-grpc-service-with-extauthpolicy-)
+* [Lab 18 - Apply rate limiting to the GRPC service](#lab-18---apply-rate-limiting-to-the-grpc-service-)
 
 
 
 ## Labs that Require Solo Istio Images and included Solo Envoy Filters
-* [Lab 16 - Leveraging the Latency EnvoyFilter for additional performance metrics from our gateway](#lab-16---leveraging-the-latency-envoyfilter-for-additional-performance-metrics-from-our-gateway-)
+* [Lab 19 - Leveraging the Latency EnvoyFilter for additional performance metrics from our gateway](#lab-19---leveraging-the-latency-envoyfilter-for-additional-performance-metrics-from-our-gateway-)
 
 
 ## Introduction <a name="introduction"></a>
@@ -1947,10 +1950,464 @@ As a next step to this exercise, we can swap the example `grpc-extauth` Sidecar 
 ![](images/extauth/passthrough3.png)
 
 
+## Lab 16 - Routing to a GRPC Service <a name="lab-16---routing-to-a-grpc-service-"></a>
+
+In this lab we are going to explore routing to a GRPC service through the gateway. In this example we will use a GRPC service `currency` that converts one money amount to another currency
+
+Since we can treat this as a new app/team we can create a new `Workspace` and `WorkspaceSettings` for our currency service
+
+First we need to create the `currency` namespace and label it for istio injection
+```
+kubectl --context ${CLUSTER1} create namespace currency
+kubectl --context ${CLUSTER1} label namespace currency istio-injection="enabled" --overwrite
+```
+
+Next we can configure the Workspace
+
+```bash
+kubectl --context ${CLUSTER1} apply -f - <<EOF
+apiVersion: admin.gloo.solo.io/v2
+kind: Workspace
+metadata:
+  name: currency
+  namespace: gloo-mesh
+  labels:
+    allow_ingress: "true"
+spec:
+  workloadClusters:
+  - name: cluster1
+    namespaces:
+    - name: currency
+EOF
+```
+
+Then we can deploy the WorkspaceSettings
+
+```bash
+kubectl --context ${CLUSTER1} apply -f - <<EOF
+apiVersion: admin.gloo.solo.io/v2
+kind: WorkspaceSettings
+metadata:
+  name: currency
+  namespace: currency
+spec:
+  importFrom:
+  - workspaces:
+    - name: gateways
+    resources:
+    - kind: SERVICE
+  exportTo:
+  - workspaces:
+    - name: gateways
+    resources:
+    - kind: SERVICE
+      labels:
+        app: currencyservice
+    - kind: ALL
+      labels:
+        expose: "true"
+EOF
+```
+
+Next we can deploy the `currency` GRPC service into the `currency` namespace
+
+```bash
+kubectl --context ${CLUSTER1} apply -f - <<EOF
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: currency
+  namespace: currency
+---
+    apiVersion: v1
+    kind: Service
+    metadata:
+      name: currencyservice
+      namespace: currency
+      labels:
+        app: currencyservice
+    spec:
+      selector:
+        app: currencyservice
+      ports:
+      - name: grpc
+        port: 7000
+        targetPort: 7000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: currencyservice
+  namespace: currency
+spec:
+  selector:
+    matchLabels:
+      app: currencyservice
+  template:
+    metadata:
+      labels:
+        app: currencyservice
+      annotations:
+        proxy.istio.io/config: '{ "holdApplicationUntilProxyStarts": true }'
+        sidecar.istio.io/inject: "true"
+    spec:
+      serviceAccountName: currency
+      terminationGracePeriodSeconds: 5
+      containers:
+      - name: server
+        image: gcr.io/solo-test-186617/currencyservice:solo-build
+        ports:
+        - name: grpc
+          containerPort: 7000
+        env:
+        - name: PORT
+          value: "7000"
+        - name: DISABLE_TRACING
+          value: "1"
+        - name: DISABLE_PROFILER
+          value: "1"
+        - name: DISABLE_DEBUGGER
+          value: "1"
+        readinessProbe:
+          exec:
+            command: ["/bin/grpc_health_probe", "-addr=:7000"]
+        livenessProbe:
+          exec:
+            command: ["/bin/grpc_health_probe", "-addr=:7000"]
+EOF
+```
+
+If you have not already done so from Lab 6, apply the parent `RouteTable` to configure the main routing 
+
+```bash
+kubectl --context ${CLUSTER1} apply -f - <<EOF
+apiVersion: networking.gloo.solo.io/v2
+kind: RouteTable
+metadata:
+  name: main
+  namespace: istio-gateways
+spec:
+  hosts:
+    - '*'
+  virtualGateways:
+    - name: north-south-gw
+      namespace: istio-gateways
+      cluster: cluster1
+  workloadSelectors: []
+  http:
+    - name: root
+      matchers:
+      - uri:
+          prefix: /
+      delegate:
+        routeTables:
+          - labels:
+              expose: "true"
+EOF
+```
+
+Now we can deploy a RouteTable for our currency service
+
+```bash
+kubectl --context ${CLUSTER1} apply -f - <<EOF
+apiVersion: networking.gloo.solo.io/v2
+kind: RouteTable
+metadata:
+  name: currency
+  namespace: currency
+  labels:
+    expose: "true"
+spec:
+  http:
+    - name: currency
+      labels:
+        route_name: currency
+      matchers:
+      - uri:
+          prefix: /hipstershop.CurrencyService/Convert
+      forwardTo:
+        destinations:
+          - ref:
+              name: currencyservice
+              namespace: currency
+              cluster: cluster1
+            port:
+              number: 7000
+EOF
+```
+
+Test that the route is serving traffic. In order to properly test, you will need `grpcurl` installed and it can be downloaded here: [grpcurl installation](https://github.com/fullstorydev/grpcurl#installation)
+
+```bash
+grpcurl --insecure --proto example-config/grpc/online-boutique.proto -d '{ "from": { "currency_code": "USD", "nanos": 44637071, "units": "31" }, "to_code": "JPY" }' ${ENDPOINT_HTTPS_GW_CLUSTER1} hipstershop.CurrencyService/Convert
+```
+
+Output should look similar to below:
+```bash
+% grpcurl --insecure --proto example-config/grpc/online-boutique.proto -d '{ "from": { "currency_code": "USD", "nanos": 44637071, "units": "31" }, "to_code": "JPY" }' ${ENDPOINT_HTTPS_GW_CLUSTER1} hipstershop.CurrencyService/Convert
+{
+  "currencyCode": "JPY",
+  "units": "3471",
+  "nanos": 67780486
+}
+```
+
+## Lab 17 - Securing GRPC Service with ExtAuthPolicy <a name="lab-17---securing-grpc-service-with-extauthpolicy-"></a>
+
+Now that we have exposed our GRPC application using a RouteTable, let's continue by securing this service with an `ExtAuthPolicy`. This is pretty simple as we have already completed a lot of the steps in Lab 9 and can re-use some of these components
+
+```
+kubectl --context ${CLUSTER1} apply -f - <<EOF
+apiVersion: security.policy.gloo.solo.io/v2
+kind: ExtAuthPolicy
+metadata:
+  name: currency-extauth
+  namespace: currency
+spec:
+  applyToRoutes:
+  - route:
+      labels:
+        route_name: "currency"
+  config:
+    server:
+      name: cluster1-ext-auth-server
+      namespace: httpbin
+      cluster: cluster1
+    glooAuth:
+      configs:
+      - oauth2:
+          oidcAuthorizationCode:
+            appUrl: ${APP_CALLBACK_URL}
+            callbackPath: /callback
+            clientId: ${OIDC_CLIENT_ID}
+            clientSecretRef:
+              name: oidc-client-secret
+              namespace: gloo-mesh
+            issuerUrl: ${ISSUER_URL}
+            session:
+              failOnFetchFailure: true
+              redis:
+                cookieName: oidc-session
+                options:
+                  host: redis.gloo-mesh-addons:6379
+                allowRefreshing: true
+              cookieOptions:
+                maxAge: "90"
+            scopes:
+            - email
+            - profile
+            headers:
+              idTokenHeader: Jwt
+EOF
+```
+
+Now let's try to curl our GRPC service again. Since we are not passing in a valid token, this request should fail
+
+```bash
+grpcurl --insecure --proto example-config/grpc/online-boutique.proto -d '{ "from": { "currency_code": "USD", "nanos": 44637071, "units": "31" }, "to_code": "JPY" }' ${ENDPOINT_HTTPS_GW_CLUSTER1} hipstershop.CurrencyService/Convert
+```
+
+Output should look similar to below:
+
+```bash
+% grpcurl --insecure --proto example-config/grpc/online-boutique.proto -d '{ "from": { "currency_code": "USD", "nanos": 44637071, "units": "31" }, "to_code": "JPY" }' ${ENDPOINT_HTTPS_GW_CLUSTER1} hipstershop.CurrencyService/Convert
+ERROR:
+  Code: Unknown
+  Message:
+```
+
+If we provide a valid access token in the curl request, it should succeed
+
+Set your access token variable. A simple way to get this would be to grab it from our `httpbin` app that we enabled with ext auth earlier. Navigate and login to your httpbin app through the browser
+
+```bash
+echo "${APP_CALLBACK_URL}/get"
+```
+
+You can use the JWT provided in the `jwt` header as this is from the same OIDC application
+
+```bash
+{
+  "args": {}, 
+  "headers": {
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7", 
+    "Accept-Encoding": "gzip, deflate, br", 
+    "Accept-Language": "en-US,en;q=0.9", 
+    "Cache-Control": "max-age=0", 
+    "Cookie": "oidc-session=TIPANHW4ITKNEJOFXJVHINHMRWER3ZMYZZYOULXZGOHKTYEZK5HGOCTHCNGQDAGRVY5EBLBYALBTFBHGNTBZIVB546NKZ6MH5TIFKOA=", 
+    "Host": "localhost", 
+    "Jwt": "eyJraWQiOiJ4dm1UNTJKLXlyUHM1eG9rR1J2NDAxZzQ4dkxkZkFBRUtZX2NMLWdLTGo0IiwiYWxnIjoiUlMyNTYifQ.eyJzdWIiOiIwMHUxbThjeDNlM2RTUlRSdzVkNyIsIm5hbWUiOiJhbGV4IiwiZW1haWwiOiJhbGV4Lmx5QHNvbG8uaW8iLCJ2ZXIiOjEsImlzcyI6Imh0dHBzOi8vZGV2LTIyNjUzMTU4Lm9rdGEuY29tL29hdXRoMi9kZWZhdWx0IiwiYXVkIjoiMG9hNnF2enliY1ZDSzZQY1M1ZDciLCJpYXQiOjE2ODMzMjMzNDcsImV4cCI6MTY4MzMyNjk0NywianRpIjoiSUQuTnhfcmQ3bTB1b29qOVluRWVQWW94cDdpX1FNRDJpbGE1dUktRVR2bTBvOCIsImFtciI6WyJwd2QiXSwiaWRwIjoiMDBvMW04Y3d4cUtrbXM1b2M1ZDciLCJwcmVmZXJyZWRfdXNlcm5hbWUiOiJhbGV4Lmx5QHNvbG8uaW8iLCJhdXRoX3RpbWUiOjE2ODMzMjExODUsImF0X2hhc2giOiJYLThDTHVVRE1iV2I4NFBDd1pKVDh3IiwiZ3JvdXBzIjpbIkV2ZXJ5b25lIiwib3JnMS1hZG1pbnMiLCJ0aHJvd2F3YXktYWRtaW4iXX0.G-AjlzDiWiFmSdZr947Fm1g_e2DZVKxYbu80O26XksAbAORtF_-qZgTVbHT_m-YsK4I9fyTR5NgdFiTtvVf5ROTlPEYTgOzkguxG8et4K6F4Lu8lqCKWrT8k3RYm9-eatctgekXICCGLsPNAwLMZHAMnfaoaGZ6i9iNTiTe0cFVBUNOzDU5cTUrquv7FMBytJZ70wsX1LbyXYNkOV8FFgmEsVHuSQyg3irZl3XO5vQr6Ra-TzO3s44ueT_xMveU10cOMnkzu3t2GRZ96EcOEd-kuFTL_frUfZLKL5wM-d8FKjAboqZsx5ny0uziEKg75EGoaGdBKGT0g4KlMTaOM0Q"
+<...>
+}
+```
+
+Set your access token below:
+```bash
+ACCESS_TOKEN="<insert jwt token here>"
+```
+
+Now retry the curl command with your access token provided
+
+```bash
+grpcurl -H "Authorization: Bearer ${ACCESS_TOKEN}" --insecure --proto example-config/grpc/online-boutique.proto -d '{ "from": { "currency_code": "USD", "nanos": 44637071, "units": "31" }, "to_code": "JPY" }' ${ENDPOINT_HTTPS_GW_CLUSTER1} hipstershop.CurrencyService/Convert
+```
+
+Output should look similar to below:
+
+```bash
+% grpcurl -H "Authorization: Bearer ${ACCESS_TOKEN}" --insecure --proto example-config/grpc/online-boutique.proto -d '{ "from": { "currency_code": "USD", "nanos": 44637071, "units": "31" }, "to_code": "JPY" }' ${ENDPOINT_HTTPS_GW_CLUSTER1} hipstershop.CurrencyService/Convert
+{
+  "currencyCode": "JPY",
+  "units": "3471",
+  "nanos": 67780486
+}
+```
+
+Congrats! You have now just secured your GRPC service using ExtAuthPolicy!
+
+## Lab 18 - Apply rate limiting to the GRPC service <a name="lab-18---apply-rate-limiting-to-the-grpc-service-"></a>
+
+Similar to Lab 11, we can set up rate-limiting for our GRPC service. This time, we can set our rate limit for this GRPC service to 10 requests per minute
+
+```bash
+kubectl --context ${CLUSTER1} apply -f - <<EOF
+apiVersion: trafficcontrol.policy.gloo.solo.io/v2
+kind: RateLimitClientConfig
+metadata:
+  labels:
+    workspace.solo.io/exported: "true"
+  name: currency
+  namespace: currency
+spec:
+  raw:
+    rateLimits:
+      - actions:
+          - genericKey:
+              descriptorValue: counter
+---
+apiVersion: admin.gloo.solo.io/v2
+kind: RateLimitServerConfig
+metadata:
+  labels:
+    workspace.solo.io/exported: "true"
+  name: currency
+  namespace: gloo-mesh-addons
+spec:
+  destinationServers:
+  - port:
+      name: grpc
+    ref:
+      cluster: cluster1
+      name: rate-limiter
+      namespace: gloo-mesh-addons
+  raw:
+    descriptors:
+      - key: generic_key
+        rateLimit:
+          requestsPerUnit: 10
+          unit: MINUTE
+        value: counter
+---
+apiVersion: trafficcontrol.policy.gloo.solo.io/v2
+kind: RateLimitPolicy
+metadata:
+  labels:
+    workspace.solo.io/exported: "true"
+  name: currency
+  namespace: currency
+spec:
+  applyToRoutes:
+  - route:
+      labels:
+        ratelimited: "true"
+  config:
+    ratelimitClientConfig:
+      cluster: cluster1
+      name: currency
+      namespace: currency
+    ratelimitServerConfig:
+      cluster: cluster1
+      name: currency
+      namespace: gloo-mesh-addons
+    serverSettings:
+      cluster: cluster1
+      name: rate-limit-server
+      namespace: currency
+---
+apiVersion: admin.gloo.solo.io/v2
+kind: RateLimitServerSettings
+metadata:
+  labels:
+    workspace.solo.io/exported: "true"
+  name: rate-limit-server
+  namespace: currency
+spec:
+  destinationServer:
+    port:
+      name: grpc
+    ref:
+      cluster: cluster1
+      name: rate-limiter
+      namespace: gloo-mesh-addons
+EOF
+```
+
+Then we can update our `RouteTable` with the `ratelimited: true` label
+```bash
+kubectl --context ${CLUSTER1} apply -f - <<EOF
+apiVersion: networking.gloo.solo.io/v2
+kind: RouteTable
+metadata:
+  name: currency
+  namespace: currency
+  labels:
+    expose: "true"
+spec:
+  http:
+    - name: currency
+      labels:
+        route_name: currency
+        ratelimited: "true"
+      matchers:
+      - uri:
+          prefix: /hipstershop.CurrencyService/Convert
+      forwardTo:
+        destinations:
+          - ref:
+              name: currencyservice
+              namespace: currency
+              cluster: cluster1
+            port:
+              number: 7000
+EOF
+```
+
+Now retry the curl command with your access token provided, it should error after 10 req/min
+```
+for i in {1..11}; do
+  grpcurl -H "Authorization: Bearer ${ACCESS_TOKEN}" --insecure --proto example-config/grpc/online-boutique.proto -d '{ "from": { "currency_code": "USD", "nanos": 44637071, "units": "31" }, "to_code": "JPY" }' ${ENDPOINT_HTTPS_GW_CLUSTER1} hipstershop.CurrencyService/Convert
+  sleep 1
+done
+```
+
+Note: if you did not complete Lab 17, you can remove the token from your curl request. Rate limiting is not dependent on the ext auth policy to function
+
+Output should look similar to below:
+
+```bash
+% grpcurl -H "Authorization: Bearer ${ACCESS_TOKEN}" --insecure --proto example-config/grpc/online-boutique.proto -d '{ "from": { "currency_code": "USD", "nanos": 44637071, "units": "31" }, "to_code": "JPY" }' ${ENDPOINT_HTTPS_GW_CLUSTER1} hipstershop.CurrencyService/Convert
+ERROR:
+  Code: Unavailable
+  Message:
+```
+
+Congrats! You have now applied rate limiting to your GRPC service!
+
+
 
 ## Labs that Require Solo Istio Images and included Solo Envoy Filters
 
-## Lab 16 - Leveraging the Latency EnvoyFilter for additional performance metrics from our gateway <a name="lab-16---leveraging-the-latency-envoyfilter-for-additional-performance-metrics-from-our-gateway-"></a>
+## Lab 19 - Leveraging the Latency EnvoyFilter for additional performance metrics from our gateway <a name="lab-19---leveraging-the-latency-envoyfilter-for-additional-performance-metrics-from-our-gateway-"></a>
 
 The Solo Istio images are packaged with an additional proxy latency filter that measures the latency incurred by the filter chain in a histogram. We can use this latency filter by deploying an `EnvoyFilter` in Istio
 
