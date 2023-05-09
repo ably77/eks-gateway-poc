@@ -522,7 +522,7 @@ kind: Deployment
 metadata:
   name: in-mesh
 spec:
-  replicas: 1
+  replicas: 3
   selector:
     matchLabels:
       app: in-mesh
@@ -2543,6 +2543,11 @@ glooMeshAgent:
   enabled: false
 rate-limiter:
   enabled: true
+  rateLimiter:
+    resources:
+      requests:
+        cpu: 750m
+        memory: 1500Mi
 ext-auth-service:
   enabled: true
   extAuth:
@@ -2551,6 +2556,10 @@ ext-auth-service:
       registry: registry.hub.docker.com
       repository: ably77/ext-auth-service
       tag: amd64-ext-auth-service-0.35.0-poc
+    resources:
+      requests:
+        cpu: 1000m
+        memory: 2000Mi
 EOF
 ```
 
