@@ -2647,6 +2647,10 @@ spec:
           - "/policy/policy.rego"
           ports:
           - containerPort: 8181
+          resources:
+            requests:
+              cpu: "1000m"
+              memory: "1Gi"
           livenessProbe:
             httpGet:
               path: /health?plugins
