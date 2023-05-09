@@ -271,7 +271,7 @@ annotations:
 
 It allows us to have full control on which Istio revision we want to use.
 
-Then, we can tell Gloo Mesh to deploy the Istio control planes and the gateways in the cluster(s)
+Then, we can tell Gloo Mesh to deploy the Istio control plane using `IstioLifecycleManager`
 
 ```bash
 cat << EOF | kubectl --context ${CLUSTER1} apply -f -
@@ -313,10 +313,13 @@ spec:
           ingressGateways:
           - name: istio-ingressgateway
             enabled: false
-
 EOF
-cat << EOF | kubectl --context ${CLUSTER1} apply -f -
+```
 
+Afterwards we can deploy the Istio Ingress Gateway using `GatewayLifecycleManager`. Take note of the additional `nodeSelector` and `toleration` configuration to pin the gateway to a specific node pool as well as the set resource requests for our gateway
+
+```bash
+cat << EOF | kubectl --context ${CLUSTER1} apply -f -
 apiVersion: admin.gloo.solo.io/v2
 kind: GatewayLifecycleManager
 metadata:
@@ -343,8 +346,21 @@ spec:
               enabled: true
               label:
                 istio: solo-ingressgateway
-
-
+              k8s:
+                nodeSelector:
+                  solo-poc: "gateway"
+                tolerations:
+                  - key: cloud.google.com/solo-poc
+                    operator: Equal
+                    value: "gateway"
+                    effect: NoSchedule  
+                resources:
+                  requests:
+                    cpu: 7000m
+                    memory: 3Gi
+                  limits:
+                    cpu: 7800m
+                    memory: 4Gi
 EOF
 ```
 
@@ -392,8 +408,18 @@ glooMeshAgent:
   enabled: false
 rate-limiter:
   enabled: true
+  rateLimiter:
+    resources:
+      requests:
+        cpu: 750m
+        memory: 1500Mi
 ext-auth-service:
   enabled: true
+  extAuth:
+    resources:
+      requests:
+        cpu: 1000m
+        memory: 2000Mi
 EOF
 ```
 
@@ -514,8 +540,19 @@ spec:
       - image: docker.io/kennethreitz/httpbin
         imagePullPolicy: IfNotPresent
         name: in-mesh
+        resources:
+          requests:
+            cpu: "1000m"
+            memory: "2Gi"
         ports:
         - containerPort: 80
+      nodeSelector:
+        solo-poc: "application"
+      tolerations:
+        - key: cloud.google.com/solo-poc
+          operator: Equal
+          value: "application"
+          effect: NoSchedule  
 EOF
 ```
 
