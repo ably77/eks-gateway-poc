@@ -2542,7 +2542,7 @@ helm upgrade --install gloo-mesh-agent-addons gloo-mesh-agent/gloo-mesh-agent \
 glooMeshAgent:
   enabled: false
 rate-limiter:
-  enabled: true
+  enabled: false
   rateLimiter:
     resources:
       requests:
@@ -2558,9 +2558,15 @@ ext-auth-service:
       tag: amd64-ext-auth-service-0.35.0-poc
     resources:
       requests:
-        cpu: 1000m
-        memory: 2000Mi
+        cpu: 1500m
+        memory: 500Mi
 EOF
+```
+
+For our testing, based on the provided throughput we should scale the replicas of our `ext-auth-service` to 3
+
+```bash
+kubectl --context ${CLUSTER1} scale deploy/ext-auth-service --replicas 3
 ```
 
 Check to see that the `ext-auth-service` is deployed
@@ -2576,7 +2582,9 @@ output should look like this
 NAME                               READY   STATUS    RESTARTS   AGE
 rate-limiter-64b64b779c-xrtsn      2/2     Running   0          19m
 redis-578865fd78-rgjqm             2/2     Running   0          19m
-ext-auth-service-76d8457d9-d69k9   2/2     Running   0          92s
+ext-auth-service-76d1457d9-z79k9   2/2     Running   0          92s
+ext-auth-service-74d2427d3-q69b9   2/2     Running   0          92s
+ext-auth-service-16f8257d9-d38z9   2/2     Running   0          92s
 ```
 
 ### Deploying OPA
@@ -2649,8 +2657,8 @@ spec:
           - containerPort: 8181
           resources:
             requests:
-              cpu: "1000m"
-              memory: "1Gi"
+              cpu: "2000m"
+              memory: "2Gi"
           livenessProbe:
             httpGet:
               path: /health?plugins
