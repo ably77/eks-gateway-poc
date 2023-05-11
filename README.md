@@ -255,12 +255,6 @@ export ENDPOINT_HTTPS_GW_CLUSTER1=$(kubectl --context ${CLUSTER1} -n istio-gatew
 export HOST_GW_CLUSTER1=$(echo ${ENDPOINT_HTTP_GW_CLUSTER1} | cut -d: -f1)
 ```
 
-If you are using k3d LB integration you can just set the following instead
-```
-export ENDPOINT_HTTP_GW_CLUSTER1="localhost:80"
-export ENDPOINT_HTTPS_GW_CLUSTER1="localhost:443"
-```
-
 Check that the variables have correct values:
 ```bash
 echo $ENDPOINT_HTTP_GW_CLUSTER1
