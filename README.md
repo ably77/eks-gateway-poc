@@ -568,7 +568,7 @@ helm upgrade --install gloo-mesh-agent-addons gloo-mesh-agent/gloo-mesh-agent \
 glooMeshAgent:
   enabled: false
 rate-limiter:
-  enabled: false
+  enabled: true
   rateLimiter:
     resources:
       requests:
