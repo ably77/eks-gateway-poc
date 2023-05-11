@@ -320,16 +320,16 @@ EOF
 
 ## Lab 3 - Reconfigure Previous Labs <a name="lab-3---reconfigure-previous-labs-"></a>
 
-Since we already have the `httpbin` app deployed and configured by our existing Istio, we going to re-deploy the httpbin application to use our newly provisioned `1-17` revisioned Istio.
+Since we already have the `httpbin` app deployed and configured by our existing Istio, we going to re-deploy the httpbin application to use our newly provisioned `1-16` revisioned Istio.
 
 This involves a few steps:
-- Re-label the namespace to have an istio revision label `istio.io/rev=1-17`
+- Re-label the namespace to have an istio revision label `istio.io/rev=1-16`
 - Restart httpbin deployment to pick up a new sidecar from the revision-based Istio control plane
 
 Run the following commands to deploy the httpbin app named `in-mesh` on `cluster1`. 
 ```bash
 kubectl --context ${CLUSTER1} label namespace httpbin istio-injection-
-kubectl --context ${CLUSTER1} label namespace httpbin istio.io/rev=1-17 --overwrite
+kubectl --context ${CLUSTER1} label namespace httpbin istio.io/rev=1-16 --overwrite
 
 kubectl --context ${CLUSTER1} rollout restart deploy/in-mesh -n httpbin
 ```
@@ -508,7 +508,7 @@ If we have already deployed the `ext-auth-server` as a part of Gloo Mesh Addons 
 
 ```bash
 kubectl --context ${CLUSTER1} label namespace gloo-mesh-addons istio-injection-
-kubectl --context ${CLUSTER1} label namespace gloo-mesh-addons istio.io/rev=1-17 --overwrite
+kubectl --context ${CLUSTER1} label namespace gloo-mesh-addons istio.io/rev=1-16 --overwrite
 
 helm upgrade --install gloo-mesh-agent-addons gloo-mesh-agent/gloo-mesh-agent \
 --namespace gloo-mesh-addons \
