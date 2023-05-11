@@ -242,7 +242,7 @@ kubectl --context ${CLUSTER1} get pods -n istio-system && kubectl --context ${CL
 When they are ready, you should get this output:
 ```
 NAME                      READY   STATUS    RESTARTS   AGE
-istiod-5c669bcf6f-2hn6c   1/1     Running   0          3m7s
+istiod-1-14-5c669bcf6f-2hn6c   1/1     Running   0          3m7s
 NAME                                     READY   STATUS    RESTARTS   AGE
 istio-ingressgateway-744fcf4fb-5dc7q     1/1     Running   0          2m44s
 ```
