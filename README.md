@@ -1585,7 +1585,7 @@ If you provide a token in the authorization header, its implicitly default locat
 Example curl command with no token - output should be `200`
 
 ```bash
-curl -kI https://${ENDPOINT_HTTPS_GW_CLUSTER1}/get"
+curl -kI https://${ENDPOINT_HTTPS_GW_CLUSTER1}/get
 ```
 
 output:
@@ -1669,7 +1669,7 @@ Now let's try our test again
 Example curl command with no token - output should now be `403` because no token was presented
 
 ```bash
-curl -kI https://${ENDPOINT_HTTPS_GW_CLUSTER1}/get"
+curl -kI https://${ENDPOINT_HTTPS_GW_CLUSTER1}/get
 ```
 
 output:
