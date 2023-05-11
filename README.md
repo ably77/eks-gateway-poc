@@ -1274,14 +1274,14 @@ Statistics        Avg      Stdev        Max
 Bombarding https://34.139.255.28:443/get for 1m0s using 100 connection(s)
 
 Statistics        Avg      Stdev        Max
-  Reqs/sec       750.03      94.21    1329.61
-  Latency        9.92ms     4.95ms      1.02s
+  Reqs/sec       750.04      92.71    1281.55
+  Latency        9.91ms     1.38ms    35.38ms
   Latency Distribution
      50%     9.72ms
-     75%    10.88ms
-     90%    12.11ms
-     95%    12.94ms
-     99%    16.02ms
+     75%    10.90ms
+     90%    12.10ms
+     95%    12.98ms
+     99%    15.89ms
   HTTP codes:
     1xx - 0, 2xx - 45006, 3xx - 0, 4xx - 0, 5xx - 0
     others - 0
