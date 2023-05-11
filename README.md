@@ -1213,3 +1213,123 @@ x-envoy-upstream-service-time: 6
 ```
 
 ## Load Test 1 <a name="load-test-1-"></a>
+
+Example load gen client based on [Bombardier](https://github.com/codesenberg/bombardier)
+
+```bash
+kubectl --context ${CLUSTER1} apply -f - <<EOF
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: bombardier
+  name: bombardier
+  namespace: istio-gateways
+spec:
+  replicas: 4
+  selector:
+    matchLabels:
+      app: bombardier
+  template:
+    metadata:
+      labels:
+        app: bombardier
+    spec:
+      nodeSelector:
+        solo-poc: "loadgen"
+      tolerations:
+        - key: cloud.google.com/solo-poc
+          operator: Equal
+          value: "loadgen"
+          effect: NoSchedule  
+      containers:
+      - name: bombardier
+        image: alpine/bombardier
+        imagePullPolicy: IfNotPresent
+        resources:
+          requests:
+            cpu: "1000m"
+            memory: "1Gi"
+        command: ["/bin/sh"]
+        # https with jwt - 5kb header payload
+        args: ["-c", "for run in $(seq 1 1000); do bombardier -c 100 -d 60s -r 750 -p i,p,r -k -l -H 'jwt: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJncm91cHMiOlsiYWRtaW4tZ3JvdXAiXX0.8V_AFuGdtFk3FyDKbAjDPX5zoxh7RP0TeMyVg2ZUClg' -H 'payload: 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' https://34.139.255.28/get; done"]
+EOF
+```
+
+Results from Solo test:
+```bash
+Statistics        Avg      Stdev        Max
+  Reqs/sec       750.04      93.48    1220.42
+  Latency        9.84ms     1.36ms    33.44ms
+  Latency Distribution
+     50%     9.72ms
+     75%    10.87ms
+     90%    12.03ms
+     95%    12.85ms
+     99%    15.66ms
+  HTTP codes:
+    1xx - 0, 2xx - 45006, 3xx - 0, 4xx - 0, 5xx - 0
+    others - 0
+  Throughput:     8.10MB/s
+Bombarding https://34.139.255.28:443/get for 1m0s using 100 connection(s)
+
+Statistics        Avg      Stdev        Max
+  Reqs/sec       750.03      94.21    1329.61
+  Latency        9.92ms     4.95ms      1.02s
+  Latency Distribution
+     50%     9.72ms
+     75%    10.88ms
+     90%    12.11ms
+     95%    12.94ms
+     99%    16.02ms
+  HTTP codes:
+    1xx - 0, 2xx - 45006, 3xx - 0, 4xx - 0, 5xx - 0
+    others - 0
+  Throughput:     8.10MB/s
+Bombarding https://34.139.255.28:443/get for 1m0s using 100 connection(s)
+
+Statistics        Avg      Stdev        Max
+  Reqs/sec       750.06      95.47    1222.89
+  Latency        9.94ms     1.37ms    41.26ms
+  Latency Distribution
+     50%     9.77ms
+     75%    10.92ms
+     90%    12.16ms
+     95%    13.02ms
+     99%    15.83ms
+  HTTP codes:
+    1xx - 0, 2xx - 45006, 3xx - 0, 4xx - 0, 5xx - 0
+    others - 0
+  Throughput:     8.10MB/s
+Bombarding https://34.139.255.28:443/get for 1m0s using 100 connection(s)
+
+Statistics        Avg      Stdev        Max
+  Reqs/sec       750.03      94.26    1212.49
+  Latency        9.89ms     1.39ms    36.66ms
+  Latency Distribution
+     50%     9.73ms
+     75%    10.87ms
+     90%    12.05ms
+     95%    12.90ms
+     99%    15.84ms
+  HTTP codes:
+    1xx - 0, 2xx - 45006, 3xx - 0, 4xx - 0, 5xx - 0
+    others - 0
+  Throughput:     8.10MB/s
+Bombarding https://34.139.255.28:443/get for 1m0s using 100 connection(s)
+
+Statistics        Avg      Stdev        Max
+  Reqs/sec       750.01      95.63    1117.19
+  Latency       10.01ms     1.45ms    41.98ms
+  Latency Distribution
+     50%     9.84ms
+     75%    10.99ms
+     90%    12.17ms
+     95%    13.07ms
+     99%    16.52ms
+  HTTP codes:
+    1xx - 0, 2xx - 45006, 3xx - 0, 4xx - 0, 5xx - 0
+    others - 0
+  Throughput:     8.10MB/s
+Bombarding https://34.139.255.28:443/get for 1m0s using 100 connection(s)
+```
