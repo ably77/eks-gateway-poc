@@ -1060,7 +1060,7 @@ metadata:
 spec:
   selector:
     matchLabels:
-      istio: ingressgateway
+      istio: solo-ingressgateway
   jwtRules:
   - issuer: "testing@secure.istio.io"
     # NOTE: only one of jwks or jwksUri can be used
@@ -1147,7 +1147,7 @@ metadata:
 spec:
   selector:
     matchLabels:
-      istio: ingressgateway
+      istio: solo-ingressgateway
   action: DENY
   rules:
   - from:
