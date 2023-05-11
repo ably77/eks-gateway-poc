@@ -11,7 +11,7 @@ This runbook assumes that you already have Gloo Mesh installed as described in `
 * [Lab 0 - Prerequisites](#lab-0---prerequisites-)
 * [Lab 1 - Setting up your Environment Variables](#lab-1---setting-up-your-environment-variables-)
 * [Lab 2 - Deploy Revision based Istio using Gloo Mesh Lifecycle Manager](#lab-2---deploy-revision-based-istio-using-gloo-mesh-lifecycle-manager-)
-* [Lab 3 - Configure the httpbin demo app](#lab-3---configure-the-httpbin-demo-app-)
+* [Lab 3 - Reconfigure Previous Labs](#lab-3---reconfigure-previous-labs-)
 * [Lab 4 - Using Passthrough External Auth](#lab-4---using-passthrough-external-auth-)
 * [Lab 5 - Enable JWT Validation at the Gateway](#lab-5---enable-jwt-validation-at-the-gateway-)
 
@@ -282,78 +282,71 @@ echo $ENDPOINT_HTTPS_GW_CLUSTER1
 echo $HOST_GW_CLUSTER1
 ```
 
-## Lab 3 - Configure the httpbin demo app <a name="lab-3---configure-the-httpbin-demo-app-"></a>
+## reconfigure workspaces
 
-We're going to deploy the httpbin application to demonstrate several features of Gloo Mesh.
-
-You can find more information about this application [here](http://httpbin.org/).
-
-Run the following commands to deploy the httpbin app named `in-mesh` on `cluster1`. 
+We will need to reconfigure our gateways workspace to use the `istio-gateways` namespace instead of `istio-system`
 
 ```bash
-kubectl --context ${CLUSTER1} create ns httpbin
-kubectl --context ${CLUSTER1} label namespace httpbin istio.io/rev=1-17 --overwrite
-
-kubectl --context ${CLUSTER1} apply -n httpbin -f - <<EOF
-apiVersion: v1
-kind: ServiceAccount
+kubectl apply --context ${CLUSTER1} -f- <<EOF
+apiVersion: admin.gloo.solo.io/v2
+kind: Workspace
 metadata:
-  name: in-mesh
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: in-mesh
-  labels:
-    app: in-mesh
-    service: in-mesh
+  name: gateways
+  namespace: gloo-mesh
 spec:
-  ports:
-  - name: http
-    port: 8000
-    targetPort: 80
-  selector:
-    app: in-mesh
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: in-mesh
-spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: in-mesh
-      version: v1
-  template:
-    metadata:
-      labels:
-        app: in-mesh
-        version: v1
-        # uncomment for pod label injection
-        #istio.io/rev: 1-17
-    spec:
-      serviceAccountName: in-mesh
-      containers:
-      - image: docker.io/kennethreitz/httpbin
-        imagePullPolicy: IfNotPresent
-        name: in-mesh
-        resources:
-          requests:
-            cpu: "1000m"
-            memory: "2Gi"
-        ports:
-        - containerPort: 80
-      nodeSelector:
-        solo-poc: "application"
-      tolerations:
-        - key: cloud.google.com/solo-poc
-          operator: Equal
-          value: "application"
-          effect: NoSchedule  
+  workloadClusters:
+  - name: cluster1
+    namespaces:
+    - name: istio-gateways
+    - name: gloo-mesh-addons
 EOF
 ```
 
+Then, we will update our `WorkspaceSettings` Kubernetes object so that it is also a part of the `istio-gateways` namespace. We can also delete the old `WorkspaceSettings`
+
+```bash
+kubectl delete --context ${CLUSTER1} workspacesettings -n istio-system gateways
+
+kubectl apply --context ${CLUSTER1} -f- <<EOF
+apiVersion: admin.gloo.solo.io/v2
+kind: WorkspaceSettings
+metadata:
+  name: gateways
+  namespace: istio-gateways
+spec:
+  importFrom:
+  - workspaces:
+    - selector:
+        allow_ingress: "true"
+    resources:
+    - kind: SERVICE
+    - kind: ALL
+      labels:
+        expose: "true"
+  exportTo:
+  - workspaces:
+    - selector:
+        allow_ingress: "true"
+    resources:
+    - kind: SERVICE
+EOF
+```
+
+## Lab 3 - Reconfigure Previous Labs <a name="lab-3---reconfigure-previous-labs-"></a>
+
+Since we already have the `httpbin` app deployed and configured by our existing Istio, we going to re-deploy the httpbin application to use our newly provisioned `1-17` revisioned Istio.
+
+This involves a few steps:
+- Re-label the namespace to have an istio revision label `istio.io/rev=1-17`
+- Restart httpbin deployment to pick up a new sidecar from the revision-based Istio control plane
+
+Run the following commands to deploy the httpbin app named `in-mesh` on `cluster1`. 
+```bash
+kubectl --context ${CLUSTER1} label namespace httpbin istio-injection-
+kubectl --context ${CLUSTER1} label namespace httpbin istio.io/rev=1-17 --overwrite
+
+kubectl --context ${CLUSTER1} rollout restart deploy/in-mesh -n httpbin
+```
 
 You can follow the progress using the following command:
 
@@ -362,8 +355,107 @@ kubectl --context ${CLUSTER1} -n httpbin get pods
 ```
 
 ```
-NAME                           READY   STATUS    RESTARTS   AGE
-in-mesh-5d9d9549b5-qrdgd       2/2     Running   0          11s
+% kubectl --context ${CLUSTER1} -n httpbin get pods
+NAME                       READY   STATUS        RESTARTS   AGE
+in-mesh-977b6c948-bvhqx    2/2     Running       0          6s
+in-mesh-84b6978978-6kpt2   2/2     Terminating   0          6m51s
+```
+
+
+Now we can reconfigure our VirtualGateway to use our new gateway label. Additionally we will need to apply our gateway TLS secret in the `istio-gateways` namespace as well
+
+Let's first create a private key and a self-signed certificate if you haven't done so already
+
+```bash
+openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+   -keyout tls.key -out tls.crt -subj "/CN=*"
+```
+
+Then, you have to store them in a Kubernetes secrets running the following commands:
+
+```bash
+kubectl --context ${CLUSTER1} -n istio-gateways create secret generic tls-secret \
+--from-file=tls.key=tls.key \
+--from-file=tls.crt=tls.crt
+```
+
+```bash
+kubectl --context ${CLUSTER1} apply -f - <<EOF
+apiVersion: networking.gloo.solo.io/v2
+kind: VirtualGateway
+metadata:
+  name: north-south-gw
+  namespace: istio-gateways
+spec:
+  workloads:
+    - selector:
+        labels:
+          istio: solo-ingressgateway
+        cluster: cluster1
+  listeners: 
+    - http: {}
+      port:
+        number: 80
+# ---------------- Redirect to https --------------------
+      httpsRedirect: true
+# -------------------------------------------------------
+    - http: {}
+# ---------------- SSL config ---------------------------
+      port:
+        number: 443
+      tls:
+        mode: SIMPLE
+        secretName: tls-secret
+# -------------------------------------------------------
+      allowedRouteTables:
+        - host: '*'
+EOF
+```
+
+And finally let's reconfigure our main `RouteTable` to be a part of `istio-gateways` as well
+
+```bash
+kubectl --context ${CLUSTER1} delete routetable -n istio-system main
+
+kubectl --context ${CLUSTER1} apply -f - <<EOF
+apiVersion: networking.gloo.solo.io/v2
+kind: RouteTable
+metadata:
+  name: main
+  namespace: istio-gateways
+spec:
+  hosts:
+    - '*'
+  virtualGateways:
+    - name: north-south-gw
+      namespace: istio-gateways
+      cluster: cluster1
+  workloadSelectors: []
+  http:
+    - name: root
+      matchers:
+      - uri:
+          prefix: /
+      delegate:
+        routeTables:
+          - labels:
+              expose: "true"
+EOF
+```
+
+Re-discover our new gateway endpoint by locating the endpoint of our gateway which has the label `istio=solo-ingressgateway` in the `istio-gateways` namespace
+
+```bash
+export ENDPOINT_HTTP_GW_CLUSTER1=$(kubectl --context ${CLUSTER1} -n istio-gateways get svc -l istio=solo-ingressgateway -o jsonpath='{.items[0].status.loadBalancer.ingress[0].*}'):80
+export ENDPOINT_HTTPS_GW_CLUSTER1=$(kubectl --context ${CLUSTER1} -n istio-gateways get svc -l istio=solo-ingressgateway -o jsonpath='{.items[0].status.loadBalancer.ingress[0].*}'):443
+export HOST_GW_CLUSTER1=$(echo ${ENDPOINT_HTTP_GW_CLUSTER1} | cut -d: -f1)
+```
+
+You can now access the `httpbin` application securely through the browser from our newly created gateway. Note that the IP or URL has changed in the process of migrating over
+
+Get the URL to access the `httpbin` service using the following command:
+```
+echo "https://${ENDPOINT_HTTPS_GW_CLUSTER1}/get"
 ```
 
 ## Lab 4 - Using Passthrough External Auth <a name="lab-4---using-passthrough-external-auth-"></a>
@@ -393,7 +485,7 @@ kubectl --context ${CLUSTER1} -n httpbin delete ExtAuthPolicy httpbin-keycloak-e
 If we have already deployed the `ext-auth-server` as a part of Gloo Mesh Addons deployment, please update the image below using the following commands. If you  have not yet deployed the Gloo Mesh Addons, you can still continue to use the same commands below.
 
 ```bash
-kubectl --context ${CLUSTER1} create namespace gloo-mesh-addons
+kubectl --context ${CLUSTER1} label namespace gloo-mesh-addons istio-injection-
 kubectl --context ${CLUSTER1} label namespace gloo-mesh-addons istio.io/rev=1-17 --overwrite
 
 helm upgrade --install gloo-mesh-agent-addons gloo-mesh-agent/gloo-mesh-agent \
@@ -423,12 +515,16 @@ ext-auth-service:
         cpu: 1500m
         memory: 500Mi
 EOF
+
+kubectl --context ${CLUSTER1} -n gloo-mesh-addons rollout restart deploy/ext-auth-service
+kubectl --context ${CLUSTER1} -n gloo-mesh-addons rollout restart deploy/rate-limiter
+kubectl --context ${CLUSTER1} -n gloo-mesh-addons rollout restart deploy/redis
 ```
 
 For our testing, based on the provided throughput we should scale the replicas of our `ext-auth-service` to 3
 
 ```bash
-kubectl --context ${CLUSTER1} scale deploy/ext-auth-service --replicas 3
+kubectl --context ${CLUSTER1} -n gloo-mesh-addons scale deploy/ext-auth-service --replicas 3
 ```
 
 Check to see that the `ext-auth-service` is deployed
@@ -441,12 +537,12 @@ output should look like this
 
 ```bash
 % kubectl --context ${CLUSTER1} get pods -n gloo-mesh-addons
-NAME                               READY   STATUS    RESTARTS   AGE
-rate-limiter-64b64b779c-xrtsn      2/2     Running   0          19m
-redis-578865fd78-rgjqm             2/2     Running   0          19m
-ext-auth-service-76d1457d9-z79k9   2/2     Running   0          92s
-ext-auth-service-74d2427d3-q69b9   2/2     Running   0          92s
-ext-auth-service-16f8257d9-d38z9   2/2     Running   0          92s
+NAME                                READY   STATUS    RESTARTS   AGE
+redis-6bb84c5647-nzd4v              2/2     Running   0          58s
+ext-auth-service-7979d7685f-9lw2k   2/2     Running   0          58s
+rate-limiter-f9c6598c5-tlgbc        2/2     Running   0          58s
+ext-auth-service-7979d7685f-fqqnv   2/2     Running   0          13s
+ext-auth-service-7979d7685f-2gpk7   2/2     Running   0          13s
 ```
 
 ### Deploying OPA
