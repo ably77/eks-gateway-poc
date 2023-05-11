@@ -385,7 +385,9 @@ This involves a few steps:
 - Re-label the namespace to have an istio revision label `istio.io/rev=1-17`
 - Restart httpbin deployment to pick up a new sidecar from the revision-based Istio control plane
 
-Run the following commands to deploy the httpbin app named `in-mesh` on `cluster1`. 
+This lab assumes that the httpbin app already exists on the cluster and is injected using a different label. If you have not deployed the httpbin app, please refer to the `main` or `istio-takeover` branch for instructions
+
+Run the following commands to re-deploy the httpbin app named `in-mesh` on `cluster1` to pick up a new 1-17 revisioned sidecar
 ```bash
 kubectl --context ${CLUSTER1} label namespace httpbin istio-injection-
 kubectl --context ${CLUSTER1} label namespace httpbin istio.io/rev=1-17 --overwrite
