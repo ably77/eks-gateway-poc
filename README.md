@@ -10,7 +10,7 @@ This runbook assumes that you already have Gloo Mesh installed as described in `
 * [Introduction](#introduction)
 * [Lab 0 - Prerequisites](#lab-0---prerequisites-)
 * [Lab 1 - Setting up your Environment Variables](#lab-1---setting-up-your-environment-variables-)
-* [Lab 2 - Deploy Revision based Istio using Gloo Mesh Lifecycle Manager](#lab-2---deploy-revision-based-istio-using-gloo-mesh-lifecycle-manager-)
+* [Lab 2 - Deploy Revision based Istio using Helm](#lab-2---deploy-revision-based-istio-using-helm-)
 * [Lab 3 - Reconfigure Previous Labs](#lab-3---reconfigure-previous-labs-)
 * [Lab 4 - Using Passthrough External Auth](#lab-4---using-passthrough-external-auth-)
 * [Lab 5 - Enable JWT Validation at the Gateway](#lab-5---enable-jwt-validation-at-the-gateway-)
@@ -146,170 +146,105 @@ kubectl --context ${CLUSTER1} delete -n httpbin ExtAuthPolicy httpbin-extauth
 kubectl --context ${CLUSTER1} delete -n httpbin Secret oidc-client-secret
 ```
 
-## Lab 2 - Deploy Revision based Istio using Gloo Mesh Lifecycle Manager <a name="lab-2---deploy-revision-based-istio-using-gloo-mesh-lifecycle-manager-"></a>
+## Lab 2 - Deploy Revision based Istio using Helm <a name="lab-2---deploy-revision-based-istio-using-helm-"></a>
 
 **NOTE**
 This runbook assumes that you already have Gloo Mesh installed as described in `main`. Please refer to the `main` branch for instructions to install Gloo Platform if it has not already been deployed.
 
-We are going to deploy Istio using Gloo Mesh Lifecycle Manager.
+In this version of the runbook we are going to deploy Istio using Helm.
 
-First of all, let's create Kubernetes services for the gateways:
+First of all, let's Download the Istio release 1.16.4:
+```bash
+export ISTIO_VERSION=1.16.4
+curl -L https://istio.io/downloadIstio | sh -
+```
 
+Then, you need to create the `istio-gateways` namespace
 ```bash
 kubectl --context ${CLUSTER1} create ns istio-gateways
-kubectl --context ${CLUSTER1} label namespace istio-gateways istio.io/rev=1-17 --overwrite
-
-cat << EOF | kubectl --context ${CLUSTER1} apply -f -
-apiVersion: v1
-kind: Service
-metadata:
-  labels:
-    app: istio-ingressgateway
-    istio: solo-ingressgateway
-  name: istio-ingressgateway
-  namespace: istio-gateways
-spec:
-  ports:
-  - name: http2
-    port: 80
-    protocol: TCP
-    targetPort: 8080
-  - name: https
-    port: 443
-    protocol: TCP
-    targetPort: 8443
-  selector:
-    app: istio-ingressgateway
-    istio: solo-ingressgateway
-    revision: 1-17
-  type: LoadBalancer
-
-EOF
 ```
 
-Note: If using the NLB controller, additional annotations may be required in the service above. Otherwise, a Classic Load Balancer will be created
-```
-annotations:
-  # uncomment below if using NLB controller
-  #service.beta.kubernetes.io/aws-load-balancer-backend-protocol: TCP
-  #service.beta.kubernetes.io/aws-load-balancer-healthcheck-healthy-threshold: "2"
-  #service.beta.kubernetes.io/aws-load-balancer-healthcheck-interval: "10"
-  #service.beta.kubernetes.io/aws-load-balancer-healthcheck-port: "15021"
-  #service.beta.kubernetes.io/aws-load-balancer-healthcheck-protocol: tcp
-  #service.beta.kubernetes.io/aws-load-balancer-healthcheck-unhealthy-threshold: "2"
-  #service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
-  #service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
-  #service.beta.kubernetes.io/aws-load-balancer-type: nlb-ip
-```
-
-It allows us to have full control on which Istio revision we want to use.
-
-Then, we can tell Gloo Mesh to deploy the Istio control plane using `IstioLifecycleManager`
-
+Now, let's deploy the Istio control plane on the cluster:
 ```bash
-cat << EOF | kubectl --context ${CLUSTER1} apply -f -
-
-apiVersion: admin.gloo.solo.io/v2
-kind: IstioLifecycleManager
-metadata:
-  name: cluster1-installation
-  namespace: gloo-mesh
-spec:
-  installations:
-    - clusters:
-      - name: cluster1
-        defaultRevision: true
-      revision: 1-17
-      istioOperatorSpec:
-        profile: minimal
-        hub: us-docker.pkg.dev/gloo-mesh/istio-workshops
-        tag: 1.17.1-solo
-        namespace: istio-system
-        values:
-          global:
-            meshID: mesh1
-            multiCluster:
-              clusterName: cluster1
-            network: cluster1
-        meshConfig:
-          accessLogFile: /dev/stdout
-          defaultConfig:        
-            proxyMetadata:
-              ISTIO_META_DNS_CAPTURE: "true"
-              ISTIO_META_DNS_AUTO_ALLOCATE: "true"
-        components:
-          pilot:
-            k8s:
-              env:
-                - name: PILOT_ENABLE_K8S_SELECT_WORKLOAD_ENTRIES
-                  value: "false"
-              affinity:
-                podAntiAffinity:
-                  requiredDuringSchedulingIgnoredDuringExecution:
-                  - labelSelector:
-                      matchExpressions:
-                      - key: app
-                        operator: In
-                        values:
-                        - istiod
-                    topologyKey: kubernetes.io/hostname
-              hpaSpec:
-                maxReplicas: 3
-                minReplicas: 3
-              nodeSelector:
-                group: IstioSystem
-          ingressGateways:
-          - name: istio-ingressgateway
-            enabled: false
+helm --kube-context=${CLUSTER1} upgrade --install istio-1.16.4 ./istio-1.16.4/manifests/charts/istio-control/istio-discovery -n istio-system --values - <<EOF
+revision: 1-16
+global:
+  meshID: mesh1
+  multiCluster:
+    clusterName: cluster1
+  network: network1
+  hub: us-docker.pkg.dev/gloo-mesh/istio-workshops
+  tag: 1.16.4-solo
+meshConfig:
+  trustDomain: cluster1
+  accessLogFile: /dev/stdout
+  enableAutoMtls: true
+  defaultConfig:
+    envoyAccessLogService:
+      address: gloo-mesh-agent.gloo-mesh:9977
+    proxyMetadata:
+      ISTIO_META_DNS_CAPTURE: "true"
+      ISTIO_META_DNS_AUTO_ALLOCATE: "true"
+pilot:
+  env:
+    PILOT_ENABLE_K8S_SELECT_WORKLOAD_ENTRIES: "false"
 EOF
 ```
 
-Afterwards we can deploy the Istio Ingress Gateway using `GatewayLifecycleManager`. Take note of the additional `nodeSelector` and `toleration` configuration to pin the gateway to a specific node pool as well as the set resource requests for our gateway
-
+After that, you can deploy the gateway(s):
 ```bash
-cat << EOF | kubectl --context ${CLUSTER1} apply -f -
-apiVersion: admin.gloo.solo.io/v2
-kind: GatewayLifecycleManager
-metadata:
-  name: cluster1-ingress
-  namespace: gloo-mesh
-spec:
-  installations:
-    - clusters:
-      - name: cluster1
-        activeGateway: false
-      gatewayRevision: 1-17
-      istioOperatorSpec:
-        profile: empty
-        hub: us-docker.pkg.dev/gloo-mesh/istio-workshops
-        tag: 1.17.1-solo
-        values:
-          gateways:
-            istio-ingressgateway:
-              customService: true
-        components:
-          ingressGateways:
-            - name: istio-ingressgateway
-              namespace: istio-gateways
-              enabled: true
-              label:
-                istio: solo-ingressgateway
-              k8s:
-                nodeSelector:
-                  solo-poc: "gateway"
-                tolerations:
-                  - key: cloud.google.com/solo-poc
-                    operator: Equal
-                    value: "gateway"
-                    effect: NoSchedule  
-                resources:
-                  requests:
-                    cpu: 7000m
-                    memory: 3Gi
-                  limits:
-                    cpu: 7800m
-                    memory: 4Gi
+kubectl --context ${CLUSTER1} label namespace istio-gateways istio.io/rev=1-16
+
+helm --kube-context=${CLUSTER1} upgrade --install istio-ingressgateway ./istio-1.16.4/manifests/charts/gateways/istio-ingress -n istio-gateways --values - <<EOF
+global:
+  hub: us-docker.pkg.dev/gloo-mesh/istio-workshops
+  tag: 1.16.4-solo
+gateways:
+  istio-ingressgateway:
+    name: istio-ingressgateway
+    namespace: istio-gateways
+    labels:
+      istio: solo-ingressgateway
+    injectionTemplate: gateway
+    type: LoadBalancer
+    ports:
+    - name: http2
+      port: 80
+      targetPort: 8080
+    - name: https
+      port: 443
+      targetPort: 8443
+    serviceAnnotations:
+      meta.helm.sh/release-name: istio-ingressgateway
+      meta.helm.sh/release-namespace: istio-gateways
+      # uncomment below if using NLB controller
+      #service.beta.kubernetes.io/aws-load-balancer-backend-protocol: TCP
+      #service.beta.kubernetes.io/aws-load-balancer-healthcheck-healthy-threshold: "2"
+      #service.beta.kubernetes.io/aws-load-balancer-healthcheck-interval: "10"
+      #service.beta.kubernetes.io/aws-load-balancer-healthcheck-port: "15021"
+      #service.beta.kubernetes.io/aws-load-balancer-healthcheck-protocol: tcp
+      #service.beta.kubernetes.io/aws-load-balancer-healthcheck-unhealthy-threshold: "2"
+      #service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
+      #service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
+      #service.beta.kubernetes.io/aws-load-balancer-type: nlb-ip
+      # uncomment below if using classic LB controller
+      service.beta.kubernetes.io/aws-load-balancer-type: external
+      service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
+      service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
 EOF
+```
+
+Run the following command until all the Istio Pods are ready:
+```bash
+kubectl --context ${CLUSTER1} get pods -n istio-system && kubectl --context ${CLUSTER1} get pods -n istio-gateways
+```
+
+When they are ready, you should get this output:
+```
+NAME                      READY   STATUS    RESTARTS   AGE
+istiod-5c669bcf6f-2hn6c   1/1     Running   0          3m7s
+NAME                                     READY   STATUS    RESTARTS   AGE
+istio-ingressgateway-744fcf4fb-5dc7q     1/1     Running   0          2m44s
 ```
 
 Set the environment variable for the service corresponding to the Istio Ingress Gateway of the cluster(s):
