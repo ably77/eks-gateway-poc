@@ -507,6 +507,7 @@ kubectl --context ${CLUSTER1} -n httpbin delete ExtAuthPolicy httpbin-keycloak-e
 If we have already deployed the `ext-auth-server` as a part of Gloo Mesh Addons deployment, please update the image below using the following commands. If you  have not yet deployed the Gloo Mesh Addons, you can still continue to use the same commands below.
 
 ```bash
+kubectl --context ${CLUSTER1} create ns gloo-mesh-addons
 kubectl --context ${CLUSTER1} label namespace gloo-mesh-addons istio-injection-
 kubectl --context ${CLUSTER1} label namespace gloo-mesh-addons istio.io/rev=1-16 --overwrite
 
