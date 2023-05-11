@@ -243,6 +243,21 @@ spec:
               env:
                 - name: PILOT_ENABLE_K8S_SELECT_WORKLOAD_ENTRIES
                   value: "false"
+              affinity:
+                podAntiAffinity:
+                  requiredDuringSchedulingIgnoredDuringExecution:
+                  - labelSelector:
+                      matchExpressions:
+                      - key: app
+                        operator: In
+                        values:
+                        - istiod
+                    topologyKey: kubernetes.io/hostname
+              hpaSpec:
+                maxReplicas: 3
+                minReplicas: 3
+              nodeSelector:
+                group: IstioSystem
           ingressGateways:
           - name: istio-ingressgateway
             enabled: false
