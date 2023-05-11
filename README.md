@@ -73,6 +73,11 @@ Before you start running through the Labs below, it is highly recommended to rea
 This POC runbook assumes the following:
 - 1x clusters deployed on EKS (m5.2xlarge instance size)
 - AWS NLB Controller deployed on cluster
+- Gloo Platform components have already been deployed per instructions on `main` branch
+  - gateways workspace created
+  - httpbin workspace created
+- Httpbin app is deployed (will reconfigure)
+- Httpbin routing is already configured (Lab 8 in `main`)
 
 ## Lab 1 - Setting up your Environment Variables <a name="lab-1---deploy-a-kind-cluster-"></a>
 Set the GLOO_MESH_LICENSE_KEY environment variable before starting:
