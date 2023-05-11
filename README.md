@@ -153,9 +153,9 @@ This runbook assumes that you already have Gloo Mesh installed as described in `
 
 In this version of the runbook we are going to deploy Istio using Helm.
 
-First of all, let's Download the Istio release 1.16.4:
+First of all, let's Download the Istio release 1.14.5:
 ```bash
-export ISTIO_VERSION=1.16.4
+export ISTIO_VERSION=1.14.5
 curl -L https://istio.io/downloadIstio | sh -
 ```
 
@@ -166,15 +166,15 @@ kubectl --context ${CLUSTER1} create ns istio-gateways
 
 Now, let's deploy the Istio control plane on the cluster:
 ```bash
-helm --kube-context=${CLUSTER1} upgrade --install istio-1.16.4 ./istio-1.16.4/manifests/charts/istio-control/istio-discovery -n istio-system --values - <<EOF
-revision: 1-16
+helm --kube-context=${CLUSTER1} upgrade --install istio-1.14.5 ./istio-1.14.5/manifests/charts/istio-control/istio-discovery -n istio-system --values - <<EOF
+revision: 1-14
 global:
   meshID: mesh1
   multiCluster:
     clusterName: cluster1
   network: network1
   hub: us-docker.pkg.dev/gloo-mesh/istio-workshops
-  tag: 1.16.4-solo
+  tag: 1.14.5-solo
 meshConfig:
   trustDomain: cluster1
   accessLogFile: /dev/stdout
@@ -193,12 +193,12 @@ EOF
 
 After that, you can deploy the gateway(s):
 ```bash
-kubectl --context ${CLUSTER1} label namespace istio-gateways istio.io/rev=1-16
+kubectl --context ${CLUSTER1} label namespace istio-gateways istio.io/rev=1-14
 
-helm --kube-context=${CLUSTER1} upgrade --install istio-ingressgateway ./istio-1.16.4/manifests/charts/gateways/istio-ingress -n istio-gateways --values - <<EOF
+helm --kube-context=${CLUSTER1} upgrade --install istio-ingressgateway ./istio-1.14.5/manifests/charts/gateways/istio-ingress -n istio-gateways --values - <<EOF
 global:
   hub: us-docker.pkg.dev/gloo-mesh/istio-workshops
-  tag: 1.16.4-solo
+  tag: 1.14.5-solo
 gateways:
   istio-ingressgateway:
     name: istio-ingressgateway
@@ -320,16 +320,16 @@ EOF
 
 ## Lab 3 - Reconfigure Previous Labs <a name="lab-3---reconfigure-previous-labs-"></a>
 
-Since we already have the `httpbin` app deployed and configured by our existing Istio, we going to re-deploy the httpbin application to use our newly provisioned `1-16` revisioned Istio.
+Since we already have the `httpbin` app deployed and configured by our existing Istio, we going to re-deploy the httpbin application to use our newly provisioned `1-14` revisioned Istio.
 
 This involves a few steps:
-- Re-label the namespace to have an istio revision label `istio.io/rev=1-16`
+- Re-label the namespace to have an istio revision label `istio.io/rev=1-14`
 - Restart httpbin deployment to pick up a new sidecar from the revision-based Istio control plane
 
 Run the following commands to deploy the httpbin app named `in-mesh` on `cluster1`. 
 ```bash
 kubectl --context ${CLUSTER1} label namespace httpbin istio-injection-
-kubectl --context ${CLUSTER1} label namespace httpbin istio.io/rev=1-16 --overwrite
+kubectl --context ${CLUSTER1} label namespace httpbin istio.io/rev=1-14 --overwrite
 
 kubectl --context ${CLUSTER1} rollout restart deploy/in-mesh -n httpbin
 ```
@@ -509,7 +509,7 @@ If we have already deployed the `ext-auth-server` as a part of Gloo Mesh Addons 
 ```bash
 kubectl --context ${CLUSTER1} create ns gloo-mesh-addons
 kubectl --context ${CLUSTER1} label namespace gloo-mesh-addons istio-injection-
-kubectl --context ${CLUSTER1} label namespace gloo-mesh-addons istio.io/rev=1-16 --overwrite
+kubectl --context ${CLUSTER1} label namespace gloo-mesh-addons istio.io/rev=1-14 --overwrite
 
 helm upgrade --install gloo-mesh-agent-addons gloo-mesh-agent/gloo-mesh-agent \
 --namespace gloo-mesh-addons \
