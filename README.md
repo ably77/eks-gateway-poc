@@ -479,6 +479,42 @@ spec:
 EOF
 ```
 
+Finally, re-apply the httpbin `RouteTable` if you deleted it earlier when cleaning up
+
+```bash
+kubectl --context ${CLUSTER1} apply -f - <<EOF
+apiVersion: networking.gloo.solo.io/v2
+kind: RouteTable
+metadata:
+  name: httpbin
+  namespace: httpbin
+  labels:
+    expose: "true"
+spec:
+  http:
+    - name: httpbin
+      labels:
+        auth: passthrough
+        transform: body
+      matchers:
+      - uri:
+          exact: /
+      - uri:
+          prefix: /get
+      - uri:
+          prefix: /anything
+      - uri:
+          prefix: /callback
+      forwardTo:
+        destinations:
+        - ref:
+            name: in-mesh
+            namespace: httpbin
+          port:
+            number: 8000
+EOF
+```
+
 Re-discover our new gateway endpoint by locating the endpoint of our gateway which has the label `istio=solo-ingressgateway` in the `istio-gateways` namespace
 
 ```bash
