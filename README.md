@@ -110,6 +110,42 @@ kubectl config use-context ${CLUSTER1}
 > Note: these variables may need to be set in each new terminal used
 
 
+## Additional Cleanup Steps for policies from istio-takeover branch
+
+If you have already walked through the `istio-takeover` branch in its entirety, you can clean up the environment policies with the following commands
+
+```bash
+# grpc labs
+kubectl --context ${CLUSTER1} delete -n currency RateLimitClientConfig currency
+kubectl --context ${CLUSTER1} delete -n gloo-mesh-addons RateLimitServerConfig currency
+kubectl --context ${CLUSTER1} delete -n currency RateLimitPolicy currency
+kubectl --context ${CLUSTER1} delete -n currency RateLimitServerSettings rate-limit-server
+kubectl --context ${CLUSTER1} delete -n currency RouteTable currency
+kubectl --context ${CLUSTER1} delete -n currency ExtAuthPolicy currency-extauth
+kubectl --context ${CLUSTER1} delete -n currency Deployment currencyservice
+kubectl --context ${CLUSTER1} delete -n currency Service currencyservice
+kubectl --context ${CLUSTER1} delete -n currency ServiceAccount currency
+kubectl --context ${CLUSTER1} delete -n currency WorkspaceSettings currency
+kubectl --context ${CLUSTER1} delete -n currency Workspace currency
+
+# main route table in istio-system
+kubectl --context ${CLUSTER1} delete -n istio-system RouteTable main
+
+# httpbin labs
+kubectl --context ${CLUSTER1} delete -n httpbin RouteTable httpbin
+kubectl --context ${CLUSTER1} delete -n httpbin ExtAuthPolicy passthrough-auth
+kubectl --context ${CLUSTER1} delete -n httpbin ExtAuthServer cluster1-ext-auth-server
+kubectl --context ${CLUSTER1} delete -f example-config/extauth-w-sidecar-2.2.6.yaml
+kubectl --context ${CLUSTER1} delete -n httpbin RateLimitClientConfig httpbin
+kubectl --context ${CLUSTER1} delete -n gloo-mesh-addons RateLimitServerConfig httpbin
+kubectl --context ${CLUSTER1} delete -n httpbin RateLimitPolicy httpbin
+kubectl --context ${CLUSTER1} delete -n httpbin RateLimitServerSettings rate-limit-server
+kubectl --context ${CLUSTER1} delete -n httpbin ConfigMap httpbin-opa
+kubectl --context ${CLUSTER1} delete -n httpbin ExtAuthPolicy httpbin-opa
+kubectl --context ${CLUSTER1} delete -n httpbin ExtAuthPolicy httpbin-extauth
+kubectl --context ${CLUSTER1} delete -n httpbin Secret oidc-client-secret
+```
+
 ## Lab 2 - Deploy Revision based Istio using Gloo Mesh Lifecycle Manager <a name="lab-2---deploy-revision-based-istio-using-gloo-mesh-lifecycle-manager-"></a>
 
 **NOTE**
