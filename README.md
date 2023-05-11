@@ -1,5 +1,5 @@
-# NOTE:
-This runbook assumes that you already have Gloo Mesh installed as described in `main`. Please refer to the `main` branch for instructions
+**NOTE**
+This runbook assumes that you already have Gloo Mesh installed as described in `main`. Please refer to the `main` branch for instructions to install Gloo Platform if it has not already been deployed.
 
 ![Gloo Mesh Enterprise](images/gloo-mesh-enterprise.png)
 # <center>Gloo Mesh Workshop</center>
@@ -113,7 +113,7 @@ kubectl config use-context ${CLUSTER1}
 ## Lab 2 - Deploy Revision based Istio using Gloo Mesh Lifecycle Manager <a name="lab-2---deploy-revision-based-istio-using-gloo-mesh-lifecycle-manager-"></a>
 
 **NOTE**
-This runbook assumes that you already have Gloo Mesh installed as described in `main`. Please refer to the `main` branch for instructions to install Gloo Platform.
+This runbook assumes that you already have Gloo Mesh installed as described in `main`. Please refer to the `main` branch for instructions to install Gloo Platform if it has not already been deployed.
 
 We are going to deploy Istio using Gloo Mesh Lifecycle Manager.
 
