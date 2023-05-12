@@ -186,8 +186,15 @@ meshConfig:
       ISTIO_META_DNS_CAPTURE: "true"
       ISTIO_META_DNS_AUTO_ALLOCATE: "true"
 pilot:
+  replicaCount: 1
   env:
     PILOT_ENABLE_K8S_SELECT_WORKLOAD_ENTRIES: "false"
+  resources:
+    requests:
+      cpu: 1000m
+      memory: 4096Mi
+  nodeSelector:
+    group: IstioSystem
 EOF
 ```
 
@@ -206,6 +213,20 @@ gateways:
     labels:
       istio: solo-ingressgateway
     injectionTemplate: gateway
+    resources:
+      requests:
+        cpu: 7000m
+        memory: 3Gi
+      limits:
+        cpu: 7800m
+        memory: 4Gi
+    nodeSelector:
+      solo-poc: "gateway"
+    tolerations:
+      - key: cloud.google.com/solo-poc
+        operator: Equal
+        value: "gateway"
+        effect: NoSchedule  
     type: LoadBalancer
     ports:
     - name: http2
@@ -228,9 +249,9 @@ gateways:
       #service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
       #service.beta.kubernetes.io/aws-load-balancer-type: nlb-ip
       # uncomment below if using classic LB controller
-      service.beta.kubernetes.io/aws-load-balancer-type: external
-      service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
-      service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
+      #service.beta.kubernetes.io/aws-load-balancer-type: external
+      #service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
+      #service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
 EOF
 ```
 
