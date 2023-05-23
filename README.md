@@ -356,7 +356,7 @@ spec:
                     effect: NoSchedule  
                 resources:
                   requests:
-                    cpu: 3500m
+                    cpu: 3000m
                     memory: 2Gi
                   limits:
                     cpu: 3800m
