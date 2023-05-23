@@ -356,11 +356,11 @@ spec:
                     effect: NoSchedule  
                 resources:
                   requests:
-                    cpu: 7000m
-                    memory: 3Gi
+                    cpu: 3500m
+                    memory: 2Gi
                   limits:
-                    cpu: 7800m
-                    memory: 4Gi
+                    cpu: 3800m
+                    memory: 3Gi
 EOF
 ```
 
