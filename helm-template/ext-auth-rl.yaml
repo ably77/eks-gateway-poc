@@ -1,0 +1,421 @@
+---
+# Source: gloo-mesh-agent/charts/ext-auth-service/templates/deployment.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    app: ext-auth-service
+    
+  name: ext-auth-service
+  namespace: gloo-system
+---
+# Source: gloo-mesh-agent/charts/rate-limiter/templates/deployment.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    app: rate-limiter
+    
+  name: rate-limiter
+  namespace: gloo-system
+---
+# Source: gloo-mesh-agent/charts/ext-auth-service/templates/deployment.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  labels:
+    app: ext-auth-service
+    
+  name: ext-auth-service-signing-key
+  namespace: gloo-system
+type: Opaque
+data:
+  signing-key: "WjlyNER3YndESA=="
+---
+# Source: gloo-mesh-agent/charts/ext-auth-service/templates/rbac.yaml
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: ext-auth-service
+  namespace: gloo-system
+  labels:
+    app: ext-auth-service
+    
+rules:
+- apiGroups:
+  - extauth.solo.io
+  resources:
+  - authconfigs
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - extauth.solo.io
+  resources:
+  - authconfigs/status
+  verbs:
+  - get
+  - update
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
+---
+# Source: gloo-mesh-agent/charts/rate-limiter/templates/rbac.yaml
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: rate-limiter
+  namespace: gloo-system
+  labels:
+    app: rate-limiter
+    
+rules:
+- apiGroups:
+  - ratelimit.solo.io
+  resources:
+  - ratelimitconfigs
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ratelimit.solo.io
+  resources:
+  - ratelimitconfigs/status
+  verbs:
+  - get
+  - update
+---
+# Source: gloo-mesh-agent/charts/ext-auth-service/templates/rbac.yaml
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: ext-auth-service
+  namespace: gloo-system
+  labels:
+    app: ext-auth-service
+    
+subjects:
+- kind: ServiceAccount
+  name: ext-auth-service
+  namespace: gloo-system
+roleRef:
+  kind: ClusterRole
+  name: ext-auth-service
+  apiGroup: rbac.authorization.k8s.io
+---
+# Source: gloo-mesh-agent/charts/rate-limiter/templates/rbac.yaml
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: rate-limiter
+  namespace: gloo-system
+  labels:
+    app: rate-limiter
+    
+subjects:
+- kind: ServiceAccount
+  name: rate-limiter
+  namespace: gloo-system
+roleRef:
+  kind: ClusterRole
+  name: rate-limiter
+  apiGroup: rbac.authorization.k8s.io
+---
+# Source: gloo-mesh-agent/charts/ext-auth-service/templates/deployment.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: ext-auth-service
+    
+  name: ext-auth-service
+  namespace: gloo-system
+spec:
+  type: ClusterIP
+  selector:
+    app: ext-auth-service
+  ports:
+  - name: grpc
+    port: 8083
+  - name: debug
+    port: 9091
+  - name: health
+    port: 8082
+---
+# Source: gloo-mesh-agent/charts/rate-limiter/templates/deployment.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: rate-limiter
+    
+  name: rate-limiter
+  namespace: gloo-system
+spec:
+  selector:
+    app: rate-limiter
+    rate-limiter: rate-limiter
+  type: ClusterIP
+  ports:
+  - name: grpc
+    port: 8083
+  - name: ready
+    port: 8084
+  - name: debug
+    port: 9091
+---
+# Source: gloo-mesh-agent/charts/rate-limiter/templates/redis.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: rate-limiter
+    
+  name: redis
+  namespace: gloo-system
+spec:
+  ports:
+  - name: redis
+    port: 6379
+    protocol: TCP
+  selector:
+    app: rate-limiter
+    rate-limiter: redis
+---
+# Source: gloo-mesh-agent/charts/ext-auth-service/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: ext-auth-service
+    
+  name: ext-auth-service
+  namespace: gloo-system
+spec:
+  selector:
+    matchLabels:
+      app: ext-auth-service
+  template:
+    metadata:
+      labels:
+        app: ext-auth-service
+      annotations:
+        prometheus.io/path: /metrics
+        prometheus.io/port: "9091"
+        prometheus.io/scrape: "true"
+        
+        proxy.istio.io/config: "{ \"holdApplicationUntilProxyStarts\": true }"
+    spec:
+      nodeSelector:
+        solo-poc: "addons"
+      tolerations:
+        - key: cloud.google.com/solo-poc
+          operator: Equal
+          value: "addons"
+          effect: NoSchedule
+      serviceAccountName: ext-auth-service
+      containers:
+      - image: "registry.hub.docker.com/ably77/ext-auth-service:amd64-ext-auth-service-0.35.0-poc"
+        imagePullPolicy: IfNotPresent
+        name: ext-auth-service
+        env:
+        - name: LOG_LEVEL
+          value: INFO
+        - name: START_STATS_SERVER
+          value: "true"
+        - name: WATCH_NAMESPACE
+          value: ""
+        - name: SERVER_PORT
+          value: "8083"
+        - name: DEBUG_PORT
+          value: "9091"
+        - name: USER_ID_HEADER
+          value: ""
+        - name: PLUGIN_DIRECTORY
+          value: "/auth-plugins/"
+        - name: HEADERS_TO_REDACT
+          value: "authorization"
+        - name: HEALTH_FAIL_TIMEOUT
+          value: "15"
+        - name: HEALTH_HTTP_PORT
+          value: "8082"
+        - name: HEALTH_HTTP_PATH
+          value: "/healthcheck"
+        - name: HEALTH_LIVENESS_HTTP_PATH
+          value: "/livenesscheck"
+        - name: SIGNING_KEY
+          valueFrom:
+            secretKeyRef:
+              name: ext-auth-service-signing-key
+              key: signing-key
+        readinessProbe:
+          httpGet:
+            port: 8082
+            path: /healthcheck
+          initialDelaySeconds: 1
+          periodSeconds: 5
+          failureThreshold: 3
+          successThreshold: 1
+        livenessProbe:
+            httpGet:
+              port: 8082
+              path: /livenesscheck
+            initialDelaySeconds: 3
+            periodSeconds: 10
+            failureThreshold: 3
+            successThreshold: 1
+        resources:
+          requests:
+            cpu: 5500m
+            memory: 4500Mi
+        securityContext:
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+---
+# Source: gloo-mesh-agent/charts/rate-limiter/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: rate-limiter
+    
+  name: rate-limiter
+  namespace: gloo-system
+spec:
+  selector:
+    matchLabels:
+      app: rate-limiter
+      rate-limiter: rate-limiter
+  template:
+    metadata:
+      labels:
+        app: rate-limiter
+        rate-limiter: rate-limiter
+      annotations:
+        prometheus.io/path: /metrics
+        prometheus.io/port: "9091"
+        prometheus.io/scrape: "true"
+        
+        proxy.istio.io/config: "{ \"holdApplicationUntilProxyStarts\": true }"
+    spec:
+      nodeSelector:
+        solo-poc: "addons"
+      tolerations:
+        - key: cloud.google.com/solo-poc
+          operator: Equal
+          value: "addons"
+          effect: NoSchedule
+      serviceAccountName: rate-limiter
+      containers:
+      - image: "gcr.io/gloo-mesh/rate-limiter:0.7.6"
+        imagePullPolicy: IfNotPresent
+        name: rate-limiter
+        env:
+        - name: LOG_LEVEL
+          value: INFO
+        - name: START_STATS_SERVER
+          value: "true"
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: RL_PORT_GRPC
+          value: "8083"
+        - name: READY_PORT_HTTP
+          value: "8084"
+        - name: DEBUG_PORT
+          value: "9091"
+        - name: REDIS_URL
+          value: redis:6379
+        - name: REDIS_SOCKET_TYPE
+          value: tcp
+        - name: READY_PATH_HTTP
+          value: "/ready"
+        - name: ALIVE_PATH_HTTP
+          value: ""
+        readinessProbe:
+          httpGet:
+            port: 8084
+            path: /ready
+          initialDelaySeconds: 1
+          periodSeconds: 5
+          failureThreshold: 3
+          successThreshold: 1
+        resources:
+          requests:
+            cpu: 750m
+            memory: 1500Mi
+        securityContext:
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+---
+# Source: gloo-mesh-agent/charts/rate-limiter/templates/redis.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: rate-limiter
+    
+  name: redis
+  namespace: gloo-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rate-limiter
+      rate-limiter: redis
+  template:
+    metadata:
+      labels:
+        app: rate-limiter
+        rate-limiter: redis
+    spec:
+      nodeSelector:
+        solo-poc: "addons"
+      tolerations:
+        - key: cloud.google.com/solo-poc
+          operator: Equal
+          value: "addons"
+          effect: NoSchedule
+      containers:
+      - image: "docker.io/redis:6.2.6"
+        imagePullPolicy:  IfNotPresent
+        name: redis
+        args:
+        ports:
+        - containerPort: 6379
+        env:
+        - name: MASTER
+          value: "true"
+        volumeMounts:
+        - mountPath: /redis-master-data
+          name: data
+      volumes:
+      - name: data
+        emptyDir: {}
+---
+# Source: gloo-mesh-agent/templates/deployment.yaml
+# Code generated by skv2. DO NOT EDIT.
+---
+# Source: gloo-mesh-agent/templates/deployment.yaml
+---
+---
+# Source: gloo-mesh-agent/templates/rbac.yaml
+# Code generated by skv2. DO NOT EDIT.
+
+
+# Rbac manifests for gloo-mesh-agent

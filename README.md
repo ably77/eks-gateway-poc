@@ -271,7 +271,7 @@ annotations:
 
 It allows us to have full control on which Istio revision we want to use.
 
-Then, we can tell Gloo Mesh to deploy the Istio control planes and the gateways in the cluster(s)
+Then, we can tell Gloo Mesh to deploy the Istio control plane using `IstioLifecycleManager`
 
 ```bash
 cat << EOF | kubectl --context ${CLUSTER1} apply -f -
@@ -313,10 +313,13 @@ spec:
           ingressGateways:
           - name: istio-ingressgateway
             enabled: false
-
 EOF
-cat << EOF | kubectl --context ${CLUSTER1} apply -f -
+```
 
+Afterwards we can deploy the Istio Ingress Gateway using `GatewayLifecycleManager`. Take note of the additional `nodeSelector` and `toleration` configuration to pin the gateway to a specific node pool as well as the set resource requests for our gateway
+
+```bash
+cat << EOF | kubectl --context ${CLUSTER1} apply -f -
 apiVersion: admin.gloo.solo.io/v2
 kind: GatewayLifecycleManager
 metadata:
@@ -343,8 +346,21 @@ spec:
               enabled: true
               label:
                 istio: solo-ingressgateway
-
-
+              k8s:
+                nodeSelector:
+                  solo-poc: "gateway"
+                tolerations:
+                  - key: cloud.google.com/solo-poc
+                    operator: Equal
+                    value: "gateway"
+                    effect: NoSchedule  
+                resources:
+                  requests:
+                    cpu: 7000m
+                    memory: 3Gi
+                  limits:
+                    cpu: 7800m
+                    memory: 4Gi
 EOF
 ```
 
@@ -392,8 +408,18 @@ glooMeshAgent:
   enabled: false
 rate-limiter:
   enabled: true
+  rateLimiter:
+    resources:
+      requests:
+        cpu: 750m
+        memory: 1500Mi
 ext-auth-service:
   enabled: true
+  extAuth:
+    resources:
+      requests:
+        cpu: 1000m
+        memory: 2000Mi
 EOF
 ```
 
@@ -496,7 +522,7 @@ kind: Deployment
 metadata:
   name: in-mesh
 spec:
-  replicas: 1
+  replicas: 3
   selector:
     matchLabels:
       app: in-mesh
@@ -514,8 +540,19 @@ spec:
       - image: docker.io/kennethreitz/httpbin
         imagePullPolicy: IfNotPresent
         name: in-mesh
+        resources:
+          requests:
+            cpu: "1000m"
+            memory: "2Gi"
         ports:
         - containerPort: 80
+      nodeSelector:
+        solo-poc: "application"
+      tolerations:
+        - key: cloud.google.com/solo-poc
+          operator: Equal
+          value: "application"
+          effect: NoSchedule  
 EOF
 ```
 
@@ -2332,7 +2369,7 @@ If you provide a token in the authorization header, its implicitly default locat
 Example curl command with no token - output should be `200`
 
 ```bash
-curl -kI https://${ENDPOINT_HTTPS_GW_CLUSTER1}/get
+curl -kI https://${ENDPOINT_HTTPS_GW_CLUSTER1}/get"
 ```
 
 output:
@@ -2398,7 +2435,7 @@ apiVersion: security.istio.io/v1beta1
 kind: AuthorizationPolicy
 metadata:
   name: "gateway-require-jwt"
-  namespace: istio-gateways
+  namespace: istio-system
 spec:
   selector:
     matchLabels:
@@ -2416,7 +2453,7 @@ Now let's try our test again
 Example curl command with no token - output should now be `403` because no token was presented
 
 ```bash
-curl -kI https://${ENDPOINT_HTTPS_GW_CLUSTER1}/get
+curl -kI https://${ENDPOINT_HTTPS_GW_CLUSTER1}/get"
 ```
 
 output:
@@ -2505,7 +2542,12 @@ helm upgrade --install gloo-mesh-agent-addons gloo-mesh-agent/gloo-mesh-agent \
 glooMeshAgent:
   enabled: false
 rate-limiter:
-  enabled: true
+  enabled: false
+  rateLimiter:
+    resources:
+      requests:
+        cpu: 750m
+        memory: 1500Mi
 ext-auth-service:
   enabled: true
   extAuth:
@@ -2514,7 +2556,17 @@ ext-auth-service:
       registry: registry.hub.docker.com
       repository: ably77/ext-auth-service
       tag: amd64-ext-auth-service-0.35.0-poc
+    resources:
+      requests:
+        cpu: 1500m
+        memory: 500Mi
 EOF
+```
+
+For our testing, based on the provided throughput we should scale the replicas of our `ext-auth-service` to 3
+
+```bash
+kubectl --context ${CLUSTER1} scale deploy/ext-auth-service --replicas 3
 ```
 
 Check to see that the `ext-auth-service` is deployed
@@ -2530,7 +2582,9 @@ output should look like this
 NAME                               READY   STATUS    RESTARTS   AGE
 rate-limiter-64b64b779c-xrtsn      2/2     Running   0          19m
 redis-578865fd78-rgjqm             2/2     Running   0          19m
-ext-auth-service-76d8457d9-d69k9   2/2     Running   0          92s
+ext-auth-service-76d1457d9-z79k9   2/2     Running   0          92s
+ext-auth-service-74d2427d3-q69b9   2/2     Running   0          92s
+ext-auth-service-16f8257d9-d38z9   2/2     Running   0          92s
 ```
 
 ### Deploying OPA
@@ -2601,6 +2655,10 @@ spec:
           - "/policy/policy.rego"
           ports:
           - containerPort: 8181
+          resources:
+            requests:
+              cpu: "2000m"
+              memory: "2Gi"
           livenessProbe:
             httpGet:
               path: /health?plugins
