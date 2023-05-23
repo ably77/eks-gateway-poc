@@ -2566,7 +2566,7 @@ EOF
 For our testing, based on the provided throughput we should scale the replicas of our `ext-auth-service` to 3
 
 ```bash
-kubectl --context ${CLUSTER1} scale deploy/ext-auth-service --replicas 3
+kubectl --context ${CLUSTER1} scale deploy/ext-auth-service -n gloo-mesh-addons --replicas 3
 ```
 
 Check to see that the `ext-auth-service` is deployed
@@ -2624,6 +2624,13 @@ metadata:
   labels:
     app: opa
 spec:
+  nodeSelector:
+    solo-poc: "opa"
+  tolerations:
+  - key: cloud.google.com/solo-poc
+    operator: Equal
+    value: "opa"
+    effect: NoSchedule  
   replicas: 1
   selector:
     matchLabels:
