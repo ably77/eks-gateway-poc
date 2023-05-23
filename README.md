@@ -2623,14 +2623,7 @@ metadata:
   namespace: gloo-mesh-addons
   labels:
     app: opa
-spec:
-  nodeSelector:
-    solo-poc: "opa"
-  tolerations:
-  - key: cloud.google.com/solo-poc
-    operator: Equal
-    value: "opa"
-    effect: NoSchedule  
+spec:  
   replicas: 1
   selector:
     matchLabels:
@@ -2640,6 +2633,13 @@ spec:
       labels:
         app: opa
     spec:
+      nodeSelector:
+        solo-poc: "opa"
+      tolerations:
+      - key: cloud.google.com/solo-poc
+        operator: Equal
+        value: "opa"
+        effect: NoSchedule
       containers:
         - name: opa
           image: openpolicyagent/opa:latest-envoy
