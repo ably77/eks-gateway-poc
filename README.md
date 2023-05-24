@@ -623,9 +623,12 @@ output should look like this
 NAME                                READY   STATUS    RESTARTS   AGE
 redis-6bb84c5647-nzd4v              2/2     Running   0          58s
 ext-auth-service-7979d7685f-9lw2k   2/2     Running   0          58s
-rate-limiter-f9c6598c5-tlgbc        2/2     Running   0          58s
 ext-auth-service-7979d7685f-fqqnv   2/2     Running   0          13s
 ext-auth-service-7979d7685f-2gpk7   2/2     Running   0          13s
+ext-auth-service-54c6bdbf9d-6js88   2/2     Running   0          3h32m
+ext-auth-service-54c6bdbf9d-bh9rn   2/2     Running   0          104s
+ext-auth-service-54c6bdbf9d-b4lpz   2/2     Running   0          3h35m
+rate-limiter-f9c6598c5-tlgbc        2/2     Running   0          58s
 ```
 
 ### Deploying OPA
@@ -758,6 +761,7 @@ rate-limiter-64b64b779c-xrtsn      2/2     Running   0          29m
 redis-578865fd78-rgjqm             2/2     Running   0          29m
 ext-auth-service-76d8457d9-d69k9   2/2     Running   0          11m
 opa-7f845fd897-t95l2               2/2     Running   0          20s
+opa-6b8bdd489c-t5gnv               2/2     Running   0          5m
 ```
 
 In order for us to leverage the `TransformationPolicy` built into Gloo Platform, we will need to apply an internal `RouteTable` for our OPA server
