@@ -347,6 +347,7 @@ spec:
               label:
                 istio: solo-ingressgateway
               k8s:
+                replicaCount: 1
                 nodeSelector:
                   solo-poc: "gateway"
                 tolerations:
@@ -2945,6 +2946,8 @@ spec:
           prefix: /get
       - uri:
           prefix: /anything
+      - uri:
+          prefix: /bytes
       - uri:
           prefix: /callback
       forwardTo:
