@@ -215,10 +215,10 @@ gateways:
     injectionTemplate: gateway
     resources:
       requests:
-        cpu: 7000m
-        memory: 3Gi
+        cpu: 3500m
+        memory: 2Gi
       limits:
-        cpu: 7800m
+        cpu: 4000m
         memory: 4Gi
     nodeSelector:
       solo-poc: "gateway"
@@ -552,8 +552,8 @@ ext-auth-service:
       tag: amd64-ext-auth-service-0.35.0-poc
     resources:
       requests:
-        cpu: 1500m
-        memory: 500Mi
+        cpu: 400m
+        memory: 250Mi
 EOF
 
 kubectl --context ${CLUSTER1} -n gloo-mesh-addons rollout restart deploy/ext-auth-service
@@ -561,10 +561,10 @@ kubectl --context ${CLUSTER1} -n gloo-mesh-addons rollout restart deploy/rate-li
 kubectl --context ${CLUSTER1} -n gloo-mesh-addons rollout restart deploy/redis
 ```
 
-For our testing, based on the provided throughput we should scale the replicas of our `ext-auth-service` to 3
+For our testing, based on the provided throughput we should scale the replicas of our `ext-auth-service` to 6. Note that in our setup we are going to set a lower amount of CPU/MEM for each ext-auth-service and scale out horizontally to meet our load.
 
 ```bash
-kubectl --context ${CLUSTER1} -n gloo-mesh-addons scale deploy/ext-auth-service --replicas 3
+kubectl --context ${CLUSTER1} -n gloo-mesh-addons scale deploy/ext-auth-service --replicas 6
 ```
 
 Check to see that the `ext-auth-service` is deployed
@@ -580,9 +580,12 @@ output should look like this
 NAME                                READY   STATUS    RESTARTS   AGE
 redis-6bb84c5647-nzd4v              2/2     Running   0          58s
 ext-auth-service-7979d7685f-9lw2k   2/2     Running   0          58s
-rate-limiter-f9c6598c5-tlgbc        2/2     Running   0          58s
 ext-auth-service-7979d7685f-fqqnv   2/2     Running   0          13s
 ext-auth-service-7979d7685f-2gpk7   2/2     Running   0          13s
+ext-auth-service-54c6bdbf9d-6js88   2/2     Running   0          3h32m
+ext-auth-service-54c6bdbf9d-bh9rn   2/2     Running   0          104s
+ext-auth-service-54c6bdbf9d-b4lpz   2/2     Running   0          3h35m
+rate-limiter-f9c6598c5-tlgbc        2/2     Running   0          58s
 ```
 
 ### Deploying OPA
@@ -622,7 +625,7 @@ metadata:
   labels:
     app: opa
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app: opa
@@ -656,7 +659,7 @@ spec:
           resources:
             requests:
               cpu: "2000m"
-              memory: "2Gi"
+              memory: "1500Mi"
           livenessProbe:
             httpGet:
               path: /health?plugins
