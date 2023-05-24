@@ -304,10 +304,10 @@ spec:
                     effect: NoSchedule  
                 resources:
                   requests:
-                    cpu: 7000m
-                    memory: 3Gi
+                    cpu: 3500m
+                    memory: 2Gi
                   limits:
-                    cpu: 7800m
+                    cpu: 4000m
                     memory: 4Gi
 EOF
 ```
@@ -595,8 +595,8 @@ ext-auth-service:
       tag: amd64-ext-auth-service-0.35.0-poc
     resources:
       requests:
-        cpu: 1500m
-        memory: 500Mi
+        cpu: 400m
+        memory: 250Mi
 EOF
 
 kubectl --context ${CLUSTER1} -n gloo-mesh-addons rollout restart deploy/ext-auth-service
@@ -604,10 +604,10 @@ kubectl --context ${CLUSTER1} -n gloo-mesh-addons rollout restart deploy/rate-li
 kubectl --context ${CLUSTER1} -n gloo-mesh-addons rollout restart deploy/redis
 ```
 
-For our testing, based on the provided throughput we should scale the replicas of our `ext-auth-service` to 3
+For our testing, based on the provided throughput we should scale the replicas of our `ext-auth-service` to 6. Note that in our setup we are going to set a lower amount of CPU/MEM for each ext-auth-service and scale out horizontally to meet our load.
 
 ```bash
-kubectl --context ${CLUSTER1} -n gloo-mesh-addons scale deploy/ext-auth-service --replicas 3
+kubectl --context ${CLUSTER1} -n gloo-mesh-addons scale deploy/ext-auth-service --replicas 6
 ```
 
 Check to see that the `ext-auth-service` is deployed
@@ -699,7 +699,7 @@ spec:
           resources:
             requests:
               cpu: "2000m"
-              memory: "2Gi"
+              memory: "1500Mi"
           livenessProbe:
             httpGet:
               path: /health?plugins
@@ -812,9 +812,9 @@ spec:
           text: '{"input": { "action": "{{ action }}", "context": { "resourceId": "{{ resourceId }}" }, "jwt": "{{ jwt }}"}}'
         extractors:
           resourceId:
-            header: ':path'
-            regex: '.*'
-            subgroup: 0
+            header: :path
+            regex: ([^?]+)?.*
+            subgroup: 1
           action:
             header: ':method'
             regex: '.*'
