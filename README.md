@@ -772,9 +772,9 @@ spec:
           text: '{"input": { "action": "{{ action }}", "context": { "resourceId": "{{ resourceId }}" }, "jwt": "{{ jwt }}"}}'
         extractors:
           resourceId:
-            header: ':path'
-            regex: '.*'
-            subgroup: 0
+            header: :path
+            regex: ([^?]+)?.*
+            subgroup: 1
           action:
             header: ':method'
             regex: '.*'
