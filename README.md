@@ -665,7 +665,7 @@ metadata:
   labels:
     app: opa
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app: opa
