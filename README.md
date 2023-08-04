@@ -123,7 +123,7 @@ kubectl config use-context ${CLUSTER1}
 First of all, let's install the `meshctl` CLI:
 
 ```bash
-export GLOO_MESH_VERSION=v2.2.6
+export GLOO_MESH_VERSION=v2.4.0-rc1
 curl -sL https://run.solo.io/meshctl/install | sh -
 export PATH=$HOME/.gloo-mesh/bin:$PATH
 ```
@@ -136,7 +136,7 @@ helm repo update
 kubectl --context ${CLUSTER1} create ns gloo-mesh 
 helm upgrade --install gloo-mesh-enterprise gloo-mesh-enterprise/gloo-mesh-enterprise \
 --namespace gloo-mesh --kube-context ${CLUSTER1} \
---version=2.2.6 \
+--version=2.4.0-rc1 \
 --set glooMeshMgmtServer.ports.healthcheck=8091 \
 --set legacyMetricsPipeline.enabled=false \
 --set metricsgateway.enabled=true \
@@ -192,7 +192,7 @@ helm upgrade --install gloo-mesh-agent gloo-mesh-agent/gloo-mesh-agent \
   --set cluster=cluster1 \
   --set metricscollector.enabled=true \
   --set metricscollector.config.exporters.otlp.endpoint=\"${ENDPOINT_METRICS_GATEWAY}\" \
-  --version 2.2.6
+  --version 2.4.0-rc1
 ```
 
 Note that the registration can also be performed using `meshctl cluster register`.
@@ -386,7 +386,7 @@ Then, you can deploy the addons on the cluster(s) using Helm:
 helm upgrade --install gloo-mesh-agent-addons gloo-mesh-agent/gloo-mesh-agent \
 --namespace gloo-mesh-addons \
 --kube-context=${CLUSTER1} \
---version 2.2.6 \
+--version 2.4.0-rc1 \
 --values - <<EOF
 glooMeshAgent:
   enabled: false
@@ -2500,7 +2500,7 @@ kubectl --context ${CLUSTER1} label namespace gloo-mesh-addons istio.io/rev=1-17
 helm upgrade --install gloo-mesh-agent-addons gloo-mesh-agent/gloo-mesh-agent \
 --namespace gloo-mesh-addons \
 --kube-context=${CLUSTER1} \
---version 2.2.6 \
+--version 2.4.0-rc1 \
 --values - <<EOF
 glooMeshAgent:
   enabled: false
