@@ -131,20 +131,50 @@ export PATH=$HOME/.gloo-mesh/bin:$PATH
 Run the following commands to deploy the Gloo Mesh management plane:
 
 ```bash
-helm repo add gloo-mesh-enterprise https://storage.googleapis.com/gloo-mesh-enterprise/gloo-mesh-enterprise 
+helm repo add gloo-platform https://storage.googleapis.com/gloo-platform/helm-charts
 helm repo update
-kubectl --context ${CLUSTER1} create ns gloo-mesh 
-helm upgrade --install gloo-mesh-enterprise gloo-mesh-enterprise/gloo-mesh-enterprise \
---namespace gloo-mesh --kube-context ${CLUSTER1} \
+kubectl --context ${CLUSTER1} create ns gloo-mesh
+helm upgrade --install gloo-platform-crds gloo-platform/gloo-platform-crds \
+--namespace gloo-mesh \
+--kube-context ${CLUSTER1} \
+--version=2.4.0-rc1
+helm upgrade --install gloo-platform gloo-platform/gloo-platform \
+--namespace gloo-mesh \
+--kube-context ${CLUSTER1} \
 --version=2.4.0-rc1 \
---set glooMeshMgmtServer.ports.healthcheck=8091 \
---set legacyMetricsPipeline.enabled=false \
---set metricsgateway.enabled=true \
---set metricsgateway.service.type=ClusterIP \
---set glooMeshUi.serviceType=ClusterIP \
---set mgmtClusterName=${CLUSTER1} \
---set global.cluster=${CLUSTER1} \
---set licenseKey=${GLOO_MESH_LICENSE_KEY}
+ -f -<<EOF
+licensing:
+  licenseKey: ${GLOO_MESH_LICENSE_KEY}
+common:
+  cluster: cluster1
+glooMgmtServer:
+  enabled: true
+  ports:
+    healthcheck: 8091
+prometheus:
+  enabled: true
+redis:
+  deployment:
+    enabled: true
+telemetryGateway:
+  enabled: true
+  service:
+    type: LoadBalancer
+glooUi:
+  enabled: true
+  serviceType: LoadBalancer
+glooAgent:
+  enabled: true
+  relay:
+    serverAddress: gloo-mesh-mgmt-server:9900
+    authority: gloo-mesh-mgmt-server.gloo-mesh
+telemetryCollector:
+  enabled: true
+  config:
+    exporters:
+      otlp:
+        endpoint: gloo-telemetry-gateway:4317
+EOF
 kubectl --context ${CLUSTER1} -n gloo-mesh rollout status deploy/gloo-mesh-mgmt-server
 ```
 Then, you need to set the environment variable to tell the Gloo Mesh agents how to communicate with the management plane:
@@ -166,9 +196,6 @@ Finally, you need to register the cluster(s).
 Here is how you register the first one:
 
 ```bash
-helm repo add gloo-mesh-agent https://storage.googleapis.com/gloo-mesh-enterprise/gloo-mesh-agent
-helm repo update
-
 kubectl apply --context ${CLUSTER1} -f- <<EOF
 apiVersion: admin.gloo.solo.io/v2
 kind: KubernetesCluster
@@ -178,24 +205,7 @@ metadata:
 spec:
   clusterDomain: cluster.local
 EOF
-
-kubectl --context ${CLUSTER1} create ns gloo-mesh
-
-helm upgrade --install gloo-mesh-agent gloo-mesh-agent/gloo-mesh-agent \
-  --namespace gloo-mesh \
-  --kube-context=${CLUSTER1} \
-  --set relay.serverAddress=${ENDPOINT_GLOO_MESH} \
-  --set relay.authority=gloo-mesh-mgmt-server.gloo-mesh \
-  --set rate-limiter.enabled=false \
-  --set ext-auth-service.enabled=false \
-  --set glooMeshPortalServer.enabled=false \
-  --set cluster=cluster1 \
-  --set metricscollector.enabled=true \
-  --set metricscollector.config.exporters.otlp.endpoint=\"${ENDPOINT_METRICS_GATEWAY}\" \
-  --version 2.4.0-rc1
 ```
-
-Note that the registration can also be performed using `meshctl cluster register`.
 
 You can check the cluster(s) have been registered correctly using the following commands:
 
