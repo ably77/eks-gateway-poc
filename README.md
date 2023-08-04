@@ -290,7 +290,7 @@ spec:
       istioOperatorSpec:
         profile: minimal
         hub: us-docker.pkg.dev/gloo-mesh/istio-workshops
-        tag: 1.18.2-solo
+        tag: 1.18.1-solo
         namespace: istio-system
         values:
           global:
@@ -331,7 +331,7 @@ spec:
       istioOperatorSpec:
         profile: empty
         hub: us-docker.pkg.dev/gloo-mesh/istio-workshops
-        tag: 1.18.2-solo
+        tag: 1.18.1-solo
         values:
           gateways:
             istio-ingressgateway:
@@ -1357,11 +1357,11 @@ Example output
 ```
 % istioctl proxy-status
 NAME                                                          CLUSTER      CDS        LDS        EDS        RDS          ECDS         ISTIOD                         VERSION
-ext-auth-service-7fccf5b78f-mb6wb.gloo-mesh-addons            cluster1     SYNCED     SYNCED     SYNCED     SYNCED       NOT SENT     istiod-1-18-94858bc8-9chtf     1.18.2-solo
-in-mesh-5978df87cc-mfmtx.httpbin                              cluster1     SYNCED     SYNCED     SYNCED     SYNCED       NOT SENT     istiod-1-18-94858bc8-9chtf     1.18.2-solo
-istio-ingressgateway-1-18-79b44d8bb-vth6t.istio-gateways      cluster1     SYNCED     SYNCED     SYNCED     SYNCED       NOT SENT     istiod-1-18-94858bc8-9chtf     1.18.2-solo
-rate-limiter-66676f8d5b-wrcd7.gloo-mesh-addons                cluster1     SYNCED     SYNCED     SYNCED     SYNCED       NOT SENT     istiod-1-18-94858bc8-9chtf     1.18.2-solo
-redis-669c97869d-hjtfp.gloo-mesh-addons                       cluster1     SYNCED     SYNCED     SYNCED     SYNCED       NOT SENT     istiod-1-18-94858bc8-9chtf     1.18.2-solo
+ext-auth-service-7fccf5b78f-mb6wb.gloo-mesh-addons            cluster1     SYNCED     SYNCED     SYNCED     SYNCED       NOT SENT     istiod-1-18-94858bc8-9chtf     1.18.1-solo
+in-mesh-5978df87cc-mfmtx.httpbin                              cluster1     SYNCED     SYNCED     SYNCED     SYNCED       NOT SENT     istiod-1-18-94858bc8-9chtf     1.18.1-solo
+istio-ingressgateway-1-18-79b44d8bb-vth6t.istio-gateways      cluster1     SYNCED     SYNCED     SYNCED     SYNCED       NOT SENT     istiod-1-18-94858bc8-9chtf     1.18.1-solo
+rate-limiter-66676f8d5b-wrcd7.gloo-mesh-addons                cluster1     SYNCED     SYNCED     SYNCED     SYNCED       NOT SENT     istiod-1-18-94858bc8-9chtf     1.18.1-solo
+redis-669c97869d-hjtfp.gloo-mesh-addons                       cluster1     SYNCED     SYNCED     SYNCED     SYNCED       NOT SENT     istiod-1-18-94858bc8-9chtf     1.18.1-solo
 ```
 
 ## Retrieve diffs between Envoy and Istiod
@@ -1556,7 +1556,7 @@ spec:
       istioOperatorSpec:
         profile: minimal
         hub: us-docker.pkg.dev/gloo-mesh/istio-workshops
-        tag: 1.18.2-solo
+        tag: 1.18.1-solo
         namespace: istio-system
         values:
           global:
@@ -1586,7 +1586,7 @@ spec:
       istioOperatorSpec:
         profile: minimal
         hub: us-docker.pkg.dev/gloo-mesh/istio-workshops
-        tag: 1.18.2-solo
+        tag: 1.18.1-solo
         namespace: istio-system
         values:
           global:
@@ -1632,7 +1632,7 @@ spec:
       istioOperatorSpec:
         profile: empty
         hub: us-docker.pkg.dev/gloo-mesh/istio-workshops
-        tag: 1.18.2-solo
+        tag: 1.18.1-solo
         values:
           gateways:
             istio-ingressgateway:
@@ -1651,7 +1651,7 @@ spec:
       istioOperatorSpec:
         profile: empty
         hub: us-docker.pkg.dev/gloo-mesh/istio-workshops
-        tag: 1.18.2-solo
+        tag: 1.18.1-solo
         values:
           gateways:
             istio-ingressgateway:
@@ -1747,7 +1747,7 @@ spec:
       istioOperatorSpec:
         profile: minimal
         hub: us-docker.pkg.dev/gloo-mesh/istio-workshops
-        tag: 1.18.2-solo
+        tag: 1.18.1-solo
         namespace: istio-system
         values:
           global:
@@ -1788,7 +1788,7 @@ spec:
       istioOperatorSpec:
         profile: empty
         hub: us-docker.pkg.dev/gloo-mesh/istio-workshops
-        tag: 1.18.2-solo
+        tag: 1.18.1-solo
         values:
           gateways:
             istio-ingressgateway:
