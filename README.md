@@ -123,7 +123,7 @@ kubectl config use-context ${CLUSTER1}
 First of all, let's install the `meshctl` CLI:
 
 ```bash
-export GLOO_MESH_VERSION=v2.4.0-rc1
+export GLOO_MESH_VERSION=v2.4.0-rc3
 curl -sL https://run.solo.io/meshctl/install | sh -
 export PATH=$HOME/.gloo-mesh/bin:$PATH
 ```
@@ -137,11 +137,11 @@ kubectl --context ${CLUSTER1} create ns gloo-mesh
 helm upgrade --install gloo-platform-crds gloo-platform/gloo-platform-crds \
 --namespace gloo-mesh \
 --kube-context ${CLUSTER1} \
---version=2.4.0-rc1
+--version=2.4.0-rc3
 helm upgrade --install gloo-platform gloo-platform/gloo-platform \
 --namespace gloo-mesh \
 --kube-context ${CLUSTER1} \
---version=2.4.0-rc1 \
+--version=2.4.0-rc3 \
  -f -<<EOF
 licensing:
   licenseKey: ${GLOO_MESH_LICENSE_KEY}
@@ -396,7 +396,7 @@ Then, you can deploy the addons on the cluster(s) using Helm:
 helm upgrade --install gloo-mesh-agent-addons gloo-mesh-agent/gloo-mesh-agent \
 --namespace gloo-mesh-addons \
 --kube-context=${CLUSTER1} \
---version 2.4.0-rc1 \
+--version 2.4.0-rc3 \
 --values - <<EOF
 glooMeshAgent:
   enabled: false
@@ -2510,7 +2510,7 @@ kubectl --context ${CLUSTER1} label namespace gloo-mesh-addons istio.io/rev=1-18
 helm upgrade --install gloo-mesh-agent-addons gloo-mesh-agent/gloo-mesh-agent \
 --namespace gloo-mesh-addons \
 --kube-context=${CLUSTER1} \
---version 2.4.0-rc1 \
+--version 2.4.0-rc3 \
 --values - <<EOF
 glooMeshAgent:
   enabled: false
